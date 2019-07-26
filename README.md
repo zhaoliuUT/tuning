@@ -83,5 +83,3 @@ In the subdirectory `data`, the following data files / animations can be found:
 ```test0_bn.mp4  test0.mp4  test0_noncyclic.mp4  test0_noncyclic_cube.mp4 ```
 
 ```test0.npy test0_bn.npy    test0_noncyclic.npy```
-
-
