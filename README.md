@@ -1,19 +1,19 @@
 # tuning
 Python scripts for tuning curve optimization according to Efficient Coding Hypotheses 
 
-Note: currently support python3
+Note: currently only works for building in python2 environment; need to fix setup errors for python3 (mainly cython modules).
 
 ## Installation instructions
 
 
 ### Step 1. Prerequisites:
-- `python3`, `Anaconda3` , `pip3`
+- `python`, `Anaconda`, `pip`
 
 	References: https://docs.anaconda.com
 
 - For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
 
-	```python3 -m venv my-env```
+	```python -m venv my-env```
 
 	And to enter `my-env`,
 	
@@ -23,7 +23,7 @@ Note: currently support python3
 - Python packages:
 	 `numpy`, `scipy`, `matplotlib`, `Cython`
 
-	 ```pip3 install numpy scipy matplotlib Cython```
+	 ```pip install numpy scipy matplotlib Cython```
 
 	 Or:
 
@@ -41,9 +41,9 @@ Note: currently support python3
 https://jupyter.readthedocs.io/en/latest/install.html
  
 
-### Step 2. In the directory of the codes, build the cython programs:
+### Step 2. In the directory of the codes, install the package:
 
-```python setup.py build_ext --inplace```
+```python setup.py install```
 
 If it shows up an error : 
 
@@ -73,7 +73,7 @@ Solution:
 
 ### Step 3. Try to run example.py :
 
-```python3 example.py```
+```python examples/example.py```
 
 Running this example takes about 3 mins on a laptop computer equipped with an 4 cores CPU Intel i7-6500U 2.50 GHZ.
 
