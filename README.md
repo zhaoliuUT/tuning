@@ -59,10 +59,9 @@ Solution:
  - install the llvm and libomp packages:
 	```brew install llvm libomp```
  - link default complier to gcc: for example, with gcc-8 version:
- 
         ```export CC=gcc-8```
 	
-        ```export CXX=g++-8```
+	```export CXX=g++-8```
 	
 	Reference: https://stackoverflow.com/questions/36211018/clang-error-errorunsupported-option-fopenmp-on-mac-osx-el-capitan-buildin
 
