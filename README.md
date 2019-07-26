@@ -7,13 +7,11 @@ Note: currently support python3
 
 
 ### Step 1. Prerequisites:
-- `python3`, `Anaconda3`
+- `python3`, `Anaconda3` , `pip3`
 
 References: 
 
-https://docs.anaconda.com
-
-https://cython.readthedocs.io/en/latest/src/quickstart/install.html
+	https://docs.anaconda.com
 
 - For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
 
