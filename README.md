@@ -55,10 +55,15 @@ This means that OpenMp is missing.
 
 Solution:
  - install a new version of gcc with home-brew:
+ 
         ```brew install gcc```
+	
  - install the llvm and libomp packages:
+ 
 	```brew install llvm libomp```
+	
  - link default complier to gcc: for example, with gcc-8 version:
+ 
         ```export CC=gcc-8```
 	
 	```export CXX=g++-8```
