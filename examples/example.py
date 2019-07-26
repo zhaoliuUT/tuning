@@ -45,6 +45,8 @@ print("mutual information = %.4f"%tc.info)
 tc_opt = TuningCurveOptimizer(tc, FP, FM, MC_ITER_INFO = 1e5, MC_ITER_GRAD = 1e5)
 tc_opt.iterate(10, FILE_NAME = 'data/test0', ADD_TIME = False)
 
+# Plot and save animations 
+tc_opt.plot_animation(FILE_NAME = 'data/test0', ADD_TIME = False)
 
 # -----------Binary Model-----------
 curr_time = time.time()
@@ -56,7 +58,6 @@ bn_tc_opt = TuningCurveOptimizer_BN(bn_tc, FP, FM, MC_ITER_INFO = 1e5, MC_ITER_G
 bn_tc_opt.iterate(10, FILE_NAME = 'data/test0_bn',ADD_TIME = False)
 
 # Plot and save animations 
-tc_opt.plot_animation(FILE_NAME = 'data/test0', ADD_TIME = False)
 bn_tc_opt.plot_animation(FILE_NAME = 'data/test0_bn', ADD_TIME = False)
 
 # To continue iteration:
@@ -100,6 +101,8 @@ for k in range(N):
     tc_opt_nc.capacity_iterate(1, INTER_STEPS = 1, ADD_BA_CONS = False,MC_ITER_BA = 1e5, ADD_TIME = False)
 
 # tc_opt_nc.plot_info()
+
+tc_opt.save_res_list(FILE_NAME = 'data/test0_noncyclic', ADD_TIME = False)
 
 tc_opt_nc.plot_animation(FILE_NAME = 'data/test0_noncyclic', ADD_TIME = False)
 
