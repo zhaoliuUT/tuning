@@ -42,7 +42,7 @@ https://cython.readthedocs.io/en/latest/src/quickstart/install.html
 https://jupyter.readthedocs.io/en/latest/install.html
  
 
-### Step 3. In the directory of the codes, build the cython programs:
+### Step 2. In the directory of the codes, build the cython programs:
 
 ```python setup.py build_ext --inplace```
 
@@ -62,7 +62,7 @@ Solution:
 Reference: https://stackoverflow.com/questions/36211018/clang-error-errorunsupported-option-fopenmp-on-mac-osx-el-capitan-buildin
 
 
-### Step 4. Try to run example.py :
+### Step 3. Try to run example.py :
 
 ```python3 example.py```
 
