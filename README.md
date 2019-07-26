@@ -17,14 +17,6 @@ Note: currently only works for building in python2 environment; need to fix setu
 
 - For convenience, it is better to create a virtual environment to manage the packages and run the codes (or create a conda environment). 
 
-	- To create a python virtual environment with name `my-env`, for example, 
-
-		```python -m venv my-env```
-
-		And to enter `my-env`,
-
-		```source my-env/bin/activate```
-
 	- To create a conda environment with specified python version with name `my-env`, for example, 
 			
 		```conda create -n my-env python=3.6```
@@ -36,6 +28,19 @@ Note: currently only works for building in python2 environment; need to fix setu
 		To exit,
 		
 		```conda deactivate```
+		
+	- For python 3.5 or higher, you can create a virtual environment using `venv`. For example, a virtual environment with name `my-env`:
+	
+		```python -m venv my-env```
+
+		And to enter `my-env`,
+
+		```source my-env/bin/activate```
+		
+		Press Ctrl + D / Command + D to exit.
+		
+		Reference: https://docs.python.org/3/library/venv.html
+
 
 - Python packages:
 	 `numpy`, `scipy`, `matplotlib`, `Cython`
