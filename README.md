@@ -15,14 +15,27 @@ Note: currently only works for building in python2 environment; need to fix setu
 	
 	Mac Os: https://docs.anaconda.com/anaconda/install/mac-os/
 
-- For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
+- For convenience, it is better to create a virtual environment to manage the packages and run the codes (or create a conda environment). 
 
-	```python -m venv my-env```
+	- To create a python virtual environment with name `my-env`, for example, 
 
-	And to enter `my-env`,
-	
-	```source my-env/bin/activate```
+		```python -m venv my-env```
 
+		And to enter `my-env`,
+
+		```source my-env/bin/activate```
+
+	- To create a conda environment with specified python version with name `my-env`, for example, 
+			
+		```conda create -n my-env python=3.6```
+
+		And to enter `my-env`,
+
+		```conda activate my-env```
+		
+		To exit,
+		
+		```conda deactivate```
 
 - Python packages:
 	 `numpy`, `scipy`, `matplotlib`, `Cython`
