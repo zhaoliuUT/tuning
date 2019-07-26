@@ -3,27 +3,48 @@ Python scripts for tuning curve optimization according to Efficient Coding Hypot
 
 Note: currently support python3
 
-## Installation instructions For Mac OS
+## Installation instructions
 
 
-### Step 1. Check whether python or python3 is installed 
-(terminal commands: `which python`, `which python3`) 
+### Step 1. Prerequisites:
+- `python3`, `Anaconda3`
+References: 
+https://docs.anaconda.com
+https://cython.readthedocs.io/en/latest/src/quickstart/install.html
+
+- For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
+
+	```python3 -m venv my-env```
+
+	And to enter `my-env`,
+	
+	```source my-env/bin/activate```
 
 
-### Step 2. Install Anaconda3 and Cython:
-- Download installer of Anaconda3:  https://docs.anaconda.com
-- Set the path:
-      ```export PATH=~/anaconda3/bin:$PATH```
-- Install Cython:
-      ```conda install -c anaconda cython```
-- For convinience of programming, Jupiter Notebook is also recommended: https://jupyter.readthedocs.io/en/latest/install.html
+- Python packages:
+	 `numpy`, `scipy`, `matplotlib`, `Cython`
+
+	 ```pip3 install numpy scipy matplotlib Cython```
+
+	 Or:
+
+	 ```conda install numpy scipy matplotlib```
+
+	 ```conda install -c anaconda cython```
+- To generate animations of lists of tuning curves, `ffmpeg` is also needed:
+
+	```sudo apt install ffmpeg``` on Linux, 
+	
+	```brew install ffmpeg``` on MacOS.
+	
+	Reference: https://linuxize.com/post/how-to-install-ffmpeg-on-ubuntu-18-04/
+- For convenience of visualization, Jupiter Notebook is also recommended: 
+https://jupyter.readthedocs.io/en/latest/install.html
  
 
-### Step 3. In the folder of the codes, build the cython programs:
+### Step 3. In the directory of the codes, build the cython programs:
 
-```python setup_cyMIPoisson.py build_ext --inplace```
-
-```python setup_cyMIBN.py build_ext --inplace```
+```python setup.py build_ext --inplace```
 
 If it shows up an error : 
 clang: error: unsupported option '-fopenmp'
@@ -41,16 +62,16 @@ Solution:
 Reference: https://stackoverflow.com/questions/36211018/clang-error-errorunsupported-option-fopenmp-on-mac-osx-el-capitan-buildin
 
 
-
-### Step 4. Probably also need to install ffmeg [for plotting animations]:
-```brew install ffmpeg```
-
-
-### Step 5. Try to run example.py :
-```python example.py```
-
-Or:
+### Step 4. Try to run example.py :
 
 ```python3 example.py```
 
+Running this example takes about 3 mins on a laptop computer equipped with an 4 cores CPU Intel i7-6500U 2.50 GHZ.
+
+It will print to the console 10 iterations of optimizing a Poissonian Model tuning curve, 10 iterations of optimizing a Binary Model tuning curve, and 5+5 (channel+capacity) iterations of optimizing a Noncyclic Model tuning curve.
+In the subdirectory `data`, the following data files / animations can be found:
+
+```test0_bn.mp4  test0.mp4  test0_noncyclic.mp4  test0_noncyclic_cube.mp4 ```
+
+```test0.npy test0_bn.npy    test0_noncyclic.npy```
 
