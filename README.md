@@ -8,8 +8,11 @@ Note: currently support python3
 
 ### Step 1. Prerequisites:
 - `python3`, `Anaconda3`
+
 References: 
+
 https://docs.anaconda.com
+
 https://cython.readthedocs.io/en/latest/src/quickstart/install.html
 
 - For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
@@ -47,10 +50,13 @@ https://jupyter.readthedocs.io/en/latest/install.html
 ```python setup.py build_ext --inplace```
 
 If it shows up an error : 
-clang: error: unsupported option '-fopenmp'
+
+```clang: error: unsupported option '-fopenmp'
 error: command 'gcc' failed with exit status 1
+```
 
 This means that OpenMp is missing.
+
 Solution:
  - install a new version of gcc with home-brew:
         ```brew install gcc```
