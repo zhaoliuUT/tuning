@@ -9,7 +9,11 @@ Note: currently only works for building in python2 environment; need to fix setu
 ### Step 1. Prerequisites:
 - `python`, `Anaconda`, `pip`
 
-	References: https://docs.anaconda.com
+	References: 
+	
+	Linux: https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart
+	
+	Mac Os: https://docs.anaconda.com/anaconda/install/mac-os/
 
 - For convenience, it is better to create a virtual environment to manage the packages and run the codes. To create a virtual environment with name `my-env`, for example, 
 
