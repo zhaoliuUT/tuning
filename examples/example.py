@@ -82,7 +82,7 @@ tau = 1.0
 curr_time = time.time()
 tc_nc = TuningCurve_Noncyclic(tuning, weight, conv = None, tau = 1.0, MC_ITER = 1e6)
 print("computation time using Monte Carlo 1e6 iterations = %.4f"%(time.time() - curr_time))
-print("mutual information = %.4f"%tc.info)
+print("mutual information = %.4f"%tc_nc.info)
 
 # tc_nc.plot()
 
