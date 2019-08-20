@@ -75,7 +75,7 @@ error: command 'gcc' failed with exit status 1
 
 This means that OpenMp is missing.
 
-Solution:
+Solution on Mac Os:
  - install a new version of gcc with home-brew:
  
 	```brew install gcc```
