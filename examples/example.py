@@ -102,7 +102,7 @@ for k in range(N):
 
 # tc_opt_nc.plot_info()
 
-tc_opt.save_res_list(FILE_NAME = 'data/test0_noncyclic', ADD_TIME = False)
+tc_opt_nc.save_res_list(FILE_NAME = 'data/test0_noncyclic', ADD_TIME = False)
 
 tc_opt_nc.plot_animation(FILE_NAME = 'data/test0_noncyclic', ADD_TIME = False)
 
