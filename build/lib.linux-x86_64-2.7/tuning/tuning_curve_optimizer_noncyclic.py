@@ -3,7 +3,6 @@ import numpy as np
 import numpy.linalg as la
 import scipy
 from scipy import optimize
-from functools import partial
 
 from cyMINoncyclic import *
 from anim_3dcube import *
