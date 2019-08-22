@@ -13,22 +13,25 @@ class TuningCurveOptimizer_Noncyclic:
     # Poisson Distribution
     Attributes:
         Properties: numNeuro, numBin, conv, tau
-        Optimization Information: fp, fm, tuning0, grad0, info0, average, cons, bounds
+        Optimization Information: fp, fm, tuning0, grad0, info0, average, bounds
         Result Storage: res_list, res_len, num_iter, inter_steps [these 4 attributes can change]
         
     Methods:
         __init__(self,
                  TuningCurve_init, # initial input (TuningCurve_Noncyclic object)
                  fp, # upper bound (vector of size numNeuro or constant)
-                 fm) # lower bound (vector of size numNeuro or constant)
+                 fm, # lower bound (vector of size numNeuro or constant)
+                 average_cons = None, # average constraints (vector of size numNeuro or constant) # upper bounds
+                 )
                  
         # NUM_THREADS, USE_MC, MC_ITER_INFO, MC_ITER_GRAD , MC_ITER_BA, 
         # SUM_THRESHOLD_INFO, SUM_THRESHOLD_GRAD, SUM_THRESHOLD_BA: stored in res_list.
-                        
+
         channel_iterate(self, 
                         NUM_ITER = 1, 
                         INTER_STEPS = 1, 
-                        ADD_CONS = False,
+                        ADD_EQ_CONS = False,
+                        ADD_INEQ_CONS = False,
                         NUM_THREADS = 8,
                         USE_MC = True,
                         MC_ITER_INFO = 1e5,
@@ -44,7 +47,8 @@ class TuningCurveOptimizer_Noncyclic:
         capacity_iterate(self,
                         NUM_ITER = 1, 
                         INTER_STEPS = 1,
-                        ADD_BA_CONS = False, 
+                        ADD_EQ_CONS = False,
+                        ADD_INEQ_CONS = False,
                         NUM_THREADS = 8,
                         USE_MC = True,
                         MC_ITER_BA = 1e5,
@@ -68,7 +72,9 @@ class TuningCurveOptimizer_Noncyclic:
     def __init__(self,
                  TuningCurve_init, # initial input (TuningCurve_Noncyclic object)
                  fp, # upper bound (vector of size numNeuro or constant)
-                 fm): # lower bound (vector of size numNeuro or constant)
+                 fm, # lower bound (vector of size numNeuro or constant)
+                 average_cons = None, # average constraints (vector of size numNeuro or constant) # upper bounds
+                ):
         
         #self.TuningCurve_init = copy.copy(TuningCurve_init)
         self.numNeuro = TuningCurve_init.numNeuro # 2
@@ -89,7 +95,18 @@ class TuningCurveOptimizer_Noncyclic:
         else:
             raise Exception('Missing input for fp, fm!')
             
-            
+        if average_cons is not None:
+            if isinstance(average_cons, (int, float, complex)): # is number
+                average_cons = average_cons*np.ones(self.numNeuro)
+            average_cons = np.array(average_cons)  # numpy array
+            if average_cons.size != self.numNeuro:
+                raise Exception('Dimension mismatch for average constraints!')
+            if np.any(average_cons < 0):
+                raise Exception('Wrong input for average_cons: must be non-negative!')
+            if np.any(average_cons < np.dot(TuningCurve_init.tuning, TuningCurve_init.weight)):
+                raise Exception('Wrong input for average_cons: must be >= initial average!')
+
+
         self.fp = fp.copy() # might be None
         self.fm = fm.copy() # might be None
         
@@ -98,7 +115,8 @@ class TuningCurveOptimizer_Noncyclic:
         self.grad0 = TuningCurve_init.grad.copy()        
         self.info0 = TuningCurve_init.info
         # use total average instead of individual average for each neuro tuning curve
-        self.average = np.average(TuningCurve_init.tuning) # TuningCurve_init.average.copy()
+        self.average = average_cons.copy() if average_cons is not None else None
+        #np.dot(self.tuning0, self.weight0) # self.average = np.average(TuningCurve_init.tuning)
         
         self.bounds = []
         for j in range(self.numNeuro):
@@ -126,7 +144,8 @@ class TuningCurveOptimizer_Noncyclic:
     def channel_iterate(self, 
                         NUM_ITER = 1, 
                         INTER_STEPS = 1, 
-                        ADD_CONS = False, 
+                        ADD_EQ_CONS = False,
+                        ADD_INEQ_CONS = False,
                         NUM_THREADS = 8, 
                         USE_MC = True,
                         MC_ITER_INFO = 1e5, MC_ITER_GRAD = 1e5,
@@ -137,6 +156,9 @@ class TuningCurveOptimizer_Noncyclic:
         # NUM_ITER: total number of iterations
         # number of plotting/saving: NUM_ITER/INTER_STEPS
         
+        if self.average is None and (ADD_EQ_CONS or ADD_INEQ_CONS):
+            raise Exception('Must input average constraint!')
+
         tmpgrad = np.zeros_like(self.grad0) # just for temporary storage
 
 
@@ -172,16 +194,38 @@ class TuningCurveOptimizer_Noncyclic:
         curr_num_iter = sum(self.res_list['num_iter'])
         
         if PRINT:
-            print('{0:4s}   {1:9s}  {2:9s}'.format('Iter', 'Mutual Information', 'Weight Change'))
-            print('{0:4d}   {1: 3.6f}'.format(curr_num_iter,self.res_list['obj'][-1]))
+            print('{0:4s}   {1:9s}  {2:9s}  {3:9s}'.format('Iter', 'Mutual Information', 'Weight Change', 'Average'))
+            curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
+            print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,self.res_list['obj'][-1], ' ', ' ')
+                  + str(curr_avg)
+                 )
+            #curr_avg = np.average(np.dot(tc_opt_nc.res_list['x'][-1], curr_weight))
+            #print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}  {4:3.6f}'.format(0,tc_opt_nc.res_list['obj'][-1], ' ', '+', curr_avg))
 
-        if ADD_CONS:   
-            def constraint_eq(x):
-                return np.average(x) - self.average
-            my_cons = [{'type':'eq', 'fun': constraint_eq}]
+
+        my_cons = []
+        if ADD_EQ_CONS:
+            if self.numNeuro == 1:
+                my_cons += [{'type':'eq', 'fun': lambda x: (self.average - np.dot(x, curr_weight))}]
+            else:
+                def constraint_fun(x, n):
+                    vec = x.reshape(self.numNeuro, -1)
+                    return self.average[n] - np.dot(vec[n], curr_weight)
+                my_cons += [{'type':'eq', 'fun': partial(constraint_fun, n = i)} for i in range(self.numNeuro)]
+        if ADD_INEQ_CONS:
+            #inequality means that it is to be non-negative.
+            # current average <= defined average constraint.
+            if self.numNeuro == 1:
+                my_cons += [{'type':'ineq', 'fun': lambda x: (self.average - np.dot(x, curr_weight))}]
+            else:
+                def constraint_fun(x, n):
+                    vec = x.reshape(self.numNeuro, -1)
+                    return self.average[n] - np.dot(vec[n], curr_weight)
+                my_cons += [{'type':'ineq', 'fun': partial(constraint_fun, n = i)} for i in range(self.numNeuro)]
+
             
         for i in range(int(NUM_ITER/INTER_STEPS)):
-            if ADD_CONS:
+            if ADD_EQ_CONS or ADD_INEQ_CONS:
                 res = optimize.minimize(lambda x, self: opt_fun(x, curr_weight, self), \
                                         curr_tuning, method='SLSQP', args = self, \
                                         jac = lambda x, self:grad_fun(x, curr_weight, self), \
@@ -207,7 +251,11 @@ class TuningCurveOptimizer_Noncyclic:
             self.res_list['njev'].append(res['njev'])
             self.res_list['weight'].append(curr_weight.copy())
             if PRINT:
-                print('{0:4d}   {1: 3.6f} '.format(curr_num_iter,-res['fun']))
+                curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
+                print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,-res['fun'], ' ', ' ')
+                      + str(curr_avg)
+                     )
+
                 # print res['jac'].shape # 
         # save result list by default
         self.res_len = len(self.res_list['x'])
@@ -231,23 +279,29 @@ class TuningCurveOptimizer_Noncyclic:
         self.res_list['SUM_THRESHOLD_BA'].append(0)
         if FILE_NAME != "" or ADD_TIME == True:
             self.save_res_list(FILE_NAME, ADD_TIME)
-        #self.save_res_list(FILE_NAME, ADD_TIME)
-        
-    
-
         
    
     def capacity_iterate(self, NUM_ITER = 1, INTER_STEPS = 1,\
-                         ADD_BA_CONS = False, NUM_THREADS = 8, \
+                         ADD_EQ_CONS = False, ADD_INEQ_CONS = False,\
+                         NUM_THREADS = 8, \
                          USE_MC = True,\
                          MC_ITER_BA = 1e5, SUM_THRESHOLD_BA = 50,\
                          PRINT = True, FILE_NAME = "", ADD_TIME = True):
         
-        # NUM_ITER: number of iterations
-        if ADD_BA_CONS == True:
-            raise Exception("Blahut-Arimoto with constraints: not implemented yet.")
+        if self.average is None and (ADD_EQ_CONS or ADD_INEQ_CONS):
+            raise Exception('Must input average constraint!')
 
-        curr_tuning = self.res_list['x'][-1].copy()
+        if ADD_EQ_CONS:
+            raise Exception("Blahut-Arimoto with equality constraints: not implemented yet.")
+        if ADD_INEQ_CONS:
+            #inequality means that it is to be non-negative.
+            # current average <= defined average constraint.
+            if self.numNeuro == 1:
+                constraint_ineq = lambda x, w: (self.average - np.dot(x, w))
+            else:
+                constraint_ineq = lambda x, w: (self.average - np.dot(x.reshape(self.numNeuro, -1), w))
+
+	curr_tuning = self.res_list['x'][-1].copy()
         curr_weight = self.res_list['weight'][-1].copy()
         
         curr_num_iter = sum(self.res_list['num_iter'])
@@ -256,9 +310,12 @@ class TuningCurveOptimizer_Noncyclic:
         
         curr_x = curr_tuning
         if PRINT:
-            #print  '{0:4s}   {1:9s}  {2:9s}'.format('Iter', 'Mutual Information', 'Weight Change') 
-            print('{0:4d}   {1: 3.6f}'.format(curr_num_iter,self.res_list['obj'][-1]))
+            curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
+            print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,self.res_list['obj'][-1], ' ', ' ')
+                  + str(curr_avg)
+                 )
         
+        halt_during_iter = False
         for k in range(NUM_ITER):
             if USE_MC:
                 mc_prob_arimoto(weight_new, curr_x, curr_weight, self.conv, self.tau, 
@@ -270,6 +327,14 @@ class TuningCurveOptimizer_Noncyclic:
                                          SUM_THRESHOLD_BA, NUM_THREADS)
                 mean_new = partial_sum_mean_grad_noncyclic(tmpgrad, curr_x, weight_new,
                                                            self.conv, self.tau, SUM_THRESHOLD_BA, NUM_THREADS)
+            if ADD_INEQ_CONS:
+                if np.any(constraint_ineq(curr_x, weight_new) < 0):
+                    curr_avg = np.dot(self.res_list['x'][-1], weight_new)
+                    print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,mean_new, ' ', 'HALT')
+                          + str(curr_avg)
+                         )
+                    halt_during_iter = True
+                    break # the last step not saved.
             self.res_list['x'].append(curr_x.copy())
             self.res_list['grad'].append(tmpgrad.copy())
             self.res_list['obj'].append(mean_new)
@@ -282,11 +347,17 @@ class TuningCurveOptimizer_Noncyclic:
             curr_num_iter += 1
             if PRINT:
                 if (k+1)%INTER_STEPS == 0:
-                    print('{0:4d}   {1: 3.6f}             +'.format(curr_num_iter,mean_new))      
+                    curr_avg = np.dot(self.res_list['x'][-1], weight_new)
+                    print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,mean_new, ' ', '+')
+                          + str(curr_avg)
+                         )
         
         # save result list by default
         self.res_len = len(self.res_list['x'])
-        self.res_list['num_iter'].append(NUM_ITER)
+        if halt_during_iter:
+            self.res_list['num_iter'].append(k) # actual number of iterations = k
+        else:
+            self.res_list['num_iter'].append(NUM_ITER)
         self.res_list['inter_steps'].append(INTER_STEPS)
         self.res_list['NUM_THREADS'].append(NUM_THREADS)
         self.res_list['USE_MC'].append(USE_MC)
@@ -361,8 +432,6 @@ class TuningCurveOptimizer_Noncyclic:
 
         
         
-        
-        
     def plot_info(self, TITLE = ""):
         steps_list = []
         pos = 0
@@ -397,3 +466,4 @@ class TuningCurveOptimizer_Noncyclic:
         tc_opt.res_len = len(res_list['x'])
         return tc_opt
     
+
