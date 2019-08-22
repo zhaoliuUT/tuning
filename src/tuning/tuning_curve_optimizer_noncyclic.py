@@ -287,7 +287,7 @@ class TuningCurveOptimizer_Noncyclic:
         # save result list by default
         self.res_len = len(self.res_list['x'])
         self.res_list['num_iter'].append(NUM_ITER)
-        self.res_list['inter_steps'].append(1)
+        self.res_list['inter_steps'].append(INTER_STEPS)
         self.res_list['NUM_THREADS'].append(NUM_THREADS)
         self.res_list['USE_MC'].append(USE_MC)
         self.res_list['MC_ITER_INFO'].append(0)
