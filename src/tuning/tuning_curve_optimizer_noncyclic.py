@@ -302,7 +302,7 @@ class TuningCurveOptimizer_Noncyclic:
             else:
                 constraint_ineq = lambda x, w: (self.average - np.dot(x.reshape(self.numNeuro, -1), w))
 
-	curr_tuning = self.res_list['x'][-1].copy()
+        curr_tuning = self.res_list['x'][-1].copy()
         curr_weight = self.res_list['weight'][-1].copy()
         
         curr_num_iter = sum(self.res_list['num_iter'])
