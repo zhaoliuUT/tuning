@@ -11,7 +11,7 @@ from tuning.tuning_curve_optimizer_noncyclic import TuningCurveOptimizer_Noncycl
 
 # -----------Noncyclic model with inequality constraints-----------
 if __name__ == '__main__':    
-    if len(sys.argv) == 8:
+    if len(sys.argv) >= 8:
         filename = sys.argv[1]
         avg = float(sys.argv[2])
         ITER_NUM = int(sys.argv[3])
@@ -33,7 +33,7 @@ if __name__ == '__main__':
         print 'number of threads = %d'%NUM_THREADS
         
         SUM_THRESHOLD = 50 # default
-    elif len(sys.argv) == 9:
+    if len(sys.argv) == 9:
         SUM_THRESHOLD = int(sys.argv[8])
         print 'input sum_threshold  = %d'%SUM_THRESHOLD
     else:
