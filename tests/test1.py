@@ -21,6 +21,9 @@ if __name__ == '__main__':
         ITER_CAPACITY = int(sys.argv[7])
         INTER_STEPS = int(sys.argv[8])
         NUM_THREADS = int(sys.argv[9])
+        
+        if ITER_CHANNEL%INTER_STEPS!=0 or ITER_CAPACITY%INTER_STEPS!=0:
+            raise Exception('Error: wrong input of INTER_STEPS: must be factors of ITER_CHANNEL and ITER_CAPACITY.')
         #other possible parameters: USE_MC, MC_ITER (1e5 or 1e6) , SUM_THRESHOLD (50 or 100), numNeuro
         print 'input weighted average constraint = %.3f'%avg
         print 'FP = %.2f'%fp
