@@ -22,7 +22,7 @@ if __name__ == '__main__':
         INTER_STEPS = int(sys.argv[8])
         NUM_THREADS = int(sys.argv[9])
         #other possible parameters: USE_MC, MC_ITER (1e5 or 1e6) , SUM_THRESHOLD (50 or 100), numNeuro
-        print 'weighted average = %.3f'%avg
+        print 'input weighted average constraint = %.3f'%avg
         print 'FP = %.2f'%fp
         print 'FM = %.2f'%fm
         print 'number of bins = %d'%numBin
@@ -75,7 +75,7 @@ print(np.dot(tuning, weight))
 if np.any(np.dot(tuning, weight) > avg):
     raise Exception('Error: wrong input of average!')
 
-tc_opt_nc = TuningCurveOptimizer_Noncyclic(tc_nc,fp,fm, average_cons = np.max(np.dot(tuning, weight)) + 0.1)
+tc_opt_nc = TuningCurveOptimizer_Noncyclic(tc_nc,fp,fm, average_cons = avg)
 
 #tc_opt_nc = TuningCurveOptimizer_Noncyclic(tc_nc,fp,fm)
 
