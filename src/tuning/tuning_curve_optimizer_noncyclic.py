@@ -288,6 +288,7 @@ class TuningCurveOptimizer_Noncyclic:
                          USE_MC = True,\
                          MC_ITER_BA = 1e5, SUM_THRESHOLD_BA = 50,\
                          PRINT = True, FILE_NAME = "", ADD_TIME = True):
+        # Note that INTER_STEPS only plays a role in printing.
         
         if self.average is None and (ADD_EQ_CONS or ADD_INEQ_CONS):
             raise Exception('Must input average constraint!')
@@ -359,7 +360,7 @@ class TuningCurveOptimizer_Noncyclic:
             self.res_list['num_iter'].append(k) # actual number of iterations = k
         else:
             self.res_list['num_iter'].append(NUM_ITER)
-        self.res_list['inter_steps'].append(INTER_STEPS)
+        self.res_list['inter_steps'].append(1) # actual inter_steps taken.
         self.res_list['NUM_THREADS'].append(NUM_THREADS)
         self.res_list['USE_MC'].append(USE_MC)
         self.res_list['MC_ITER_INFO'].append(0)
