@@ -240,6 +240,8 @@ class TuningCurveOptimizer_Noncyclic:
                                         options = {'maxiter':INTER_STEPS, 'ftol': ftol, 'disp': disp})
         
             curr_tuning = res['x'].copy()
+            # FIXME: judge whether the iteration stops before reaching maxiter.
+            # actual number of iterations is res['nit'] - 1
             curr_num_iter += INTER_STEPS
             #print curr_tuning.shape
             # self.num_iter += INTER_STEPS
