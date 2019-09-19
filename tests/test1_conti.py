@@ -56,12 +56,12 @@ for k in range(ITER_NUM):
     tc_opt_nc.channel_iterate(ITER_CHANNEL,INTER_STEPS = INTER_STEPS, ADD_TIME = False,
                               ADD_INEQ_CONS = True, 
                               USE_MC = False,
-                              SUM_THRESHOLD_INFO = 50, SUM_THRESHOLD_GRAD = 50) #MC_ITER_INFO = 1e5, MC_ITER_GRAD = 1e5
+                              SUM_THRESHOLD_INFO = 50, SUM_THRESHOLD_GRAD = 50, NUM_THREADS = NUM_THREADS) #MC_ITER_INFO = 1e5, MC_ITER_GRAD = 1e5
     tc_opt_nc.capacity_iterate(ITER_CAPACITY, INTER_STEPS = INTER_STEPS, 
                                ADD_INEQ_CONS = True,
                                USE_MC = False,
                                SUM_THRESHOLD_BA = 50, 
-                               ADD_TIME = False)
+                               ADD_TIME = False, NUM_THREADS = NUM_THREADS)
 
 
 # tc_opt_nc.plot_info()
