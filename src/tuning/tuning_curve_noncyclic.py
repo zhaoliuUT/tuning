@@ -185,7 +185,7 @@ class TuningCurve_Noncyclic:
            
             for p in range(self.numNeuro):
                 ax_rate.plot(xx, yy_rate[p],lw = 1.5, color = color_list[p],\
-                             label = r'$\bar{f_{%d}}$ = %.1f'%(p,self.average[p]))
+                             label = r'$\bar{f_{%d}}$ = %.2f'%(p,self.average[p]))
             ax_rate.set_title('Rate Curve')
             if self.numNeuro ==1:
                 ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average], loc='center right', \
