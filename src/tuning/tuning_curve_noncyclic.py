@@ -74,6 +74,8 @@ class TuningCurve_Noncyclic:
             tuning = tuning.reshape((1,tuning.size))
         if np.any(tuning <0):
             raise Exception('Wrong input for tuning function!')
+        if weight.size != tuning.shape[0] or np.any(weight < 0) or np.fabs(np.sum(weight) - 1.0)>1e-4:
+            raise Exception('Wrong input for weights!')
         # hard to constrain on convolution now...
         if conv is None:
             conv = np.zeros(tuning.shape[1])
@@ -105,7 +107,7 @@ class TuningCurve_Noncyclic:
                 rate[i,j] = tau*rate[i,j]
         self.rate = rate # corresponding rate curve after convolution
         
-        self.average = np.average(tuning, axis = 1) # integral average
+        self.average = np.dot(tuning, weight) # integral average
         #self.num_iter = 0 # number of iterations
         
     def compute_info_grad(self,
