@@ -188,10 +188,10 @@ class TuningCurve_Noncyclic:
                              label = r'$\bar{f_{%d}}$ = %.2f'%(p,self.average[p]))
             ax_rate.set_title('Rate Curve')
             if self.numNeuro ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.2f'%self.average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]) for i in range(self.numNeuro)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]) for i in range(self.numNeuro)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             
             for p in range(self.numNeuro):
@@ -208,7 +208,7 @@ class TuningCurve_Noncyclic:
             plt.figure()
             for p in range(self.numNeuro):
                 plt.plot(xx, yy[p], lw = 1.5, color = color_list[p],\
-                               label = r'$\bar{f_{%d}}$ = %.1f'%(p,self.average[p]))
+                               label = r'$\bar{f_{%d}}$ = %.2f'%(p,self.average[p]))
                 
             plt.title('Tuning Curve with %d neurons, %d bins, MI = %.4f'%(self.numNeuro,self.numBin, self.info))
             plt.legend(loc='center right', bbox_to_anchor=(0,0.5))
@@ -420,10 +420,10 @@ class TuningCurve_Noncyclic:
                 item.set_visible(False)
                 
             if numNeuro ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.1f'%tc_list[i].average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.2f'%tc_list[i].average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(p,tc_list[i].average[p]) for p in range(numNeuro)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(p,tc_list[i].average[p]) for p in range(numNeuro)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 
             

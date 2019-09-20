@@ -116,16 +116,16 @@ class TuningCurve:
             ax_stim.set_title('Stimulus with ' +  r'$\nu$ = %d, $\tau$ = %.1f'%(self.nu, self.tau))
            
             for i in range(self.numPop):
-                ax_rate.plot(self.rate[i],linewidth=1.5, label = r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]))
+                ax_rate.plot(self.rate[i],linewidth=1.5, label = r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]))
             ax_rate.set_title('Rate Curve')
             if self.numPop ==1:
-                leg = ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average],handlelength=0, handletextpad=0,\
+                leg = ax_rate.legend([r'$\bar{f}$ = %.2f'%self.average],handlelength=0, handletextpad=0,\
                                      loc='center right', \
                                      fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 for item in leg.legendHandles:
                     item.set_visible(False)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]) for i in range(self.numPop)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]) for i in range(self.numPop)], \
                                loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             
             for i in range(self.numPop):
@@ -150,16 +150,16 @@ class TuningCurve:
                 item.set_visible(False)
             ax_tuning.set_title('Tuning Curve with %d bins, %d centers'%(self.numBin,self.numCent))           
             for i in range(self.numPop):
-                ax_rate.plot(self.rate[i], linewidth=1.5, label = r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]))
+                ax_rate.plot(self.rate[i], linewidth=1.5, label = r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]))
             ax_rate.set_title('Rate Curve')
             if self.numPop ==1:
-                leg = ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average],handlelength=0, handletextpad=0,\
+                leg = ax_rate.legend([r'$\bar{f}$ = %.2f'%self.average],handlelength=0, handletextpad=0,\
                                      loc='center right', \
                                      fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 for item in leg.legendHandles:
                     item.set_visible(False)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]) for i in range(self.numPop)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]) for i in range(self.numPop)], \
                                loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             ax_tuning.grid()
             ax_rate.grid()
@@ -353,10 +353,10 @@ class TuningCurve:
                 item.set_visible(False)
                 
             if numPop ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.1f'%tc_list[i].average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.2f'%tc_list[i].average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(p,tc_list[i].average[p]) for p in range(numPop)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(p,tc_list[i].average[p]) for p in range(numPop)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 
             

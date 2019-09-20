@@ -118,13 +118,13 @@ class TuningCurve_BN:
             ax_stim.set_title('Stimulus with ' +  r'$\nu$ = %d, $\tau$ = %.1f'%(self.nu, self.tau))
            
             for i in range(self.numPop):
-                ax_rate.plot(self.rate[i],label = r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]))
+                ax_rate.plot(self.rate[i],label = r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]))
             ax_rate.set_title('Rate Curve')
             if self.numPop ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.2f'%self.average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]) for i in range(self.numPop)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]) for i in range(self.numPop)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             
             for i in range(self.numPop):
@@ -139,7 +139,7 @@ class TuningCurve_BN:
             # plot tuning curve only
             plt.figure()
             for i in range(self.numPop):
-                plt.plot(self.tuning[i],label = r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]))
+                plt.plot(self.tuning[i],label = r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]))
             plt.title('Tuning Curve with %d bins, %d centers, MI = %.4f'%(self.numBin,self.numCent, self.info))
             plt.legend(loc='center right', bbox_to_anchor=(0,0.5))
             plt.show()
@@ -327,10 +327,10 @@ class TuningCurve_BN:
                 item.set_visible(False)
                 
             if numPop ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.1f'%tc_list[i].average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.2f'%tc_list[i].average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(p,tc_list[i].average[p]) for p in range(numPop)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(p,tc_list[i].average[p]) for p in range(numPop)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 
             
