@@ -51,8 +51,6 @@ print("mutual information = %.4f"%tc_nc.info)
 
 # tc_nc.plot()
 print(np.dot(tuning, weight))
-if np.any(np.dot(tuning, weight) > avg):
-    raise Exception('Error: wrong input of average!')
 
 tc_opt_nc = TuningCurveOptimizer_Noncyclic(tc_nc,fp,fm)
 
