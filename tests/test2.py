@@ -98,9 +98,9 @@ for k in range(ITER_NUM):
 
 # tc_opt_nc.plot_info()
 
-tc_opt_nc.save_res_list(FILE_NAME = 'data/test1_noncyclic', ADD_TIME = True)
+tc_opt_nc.save_res_list(FILE_NAME = 'data/test2_noncyclic', ADD_TIME = True)
 
-#tc_opt_nc.plot_animation(FILE_NAME = 'data/test1_noncyclic', ADD_TIME = True)
+#tc_opt_nc.plot_animation(FILE_NAME = 'data/test2_noncyclic', ADD_TIME = True)
 
-#tc_opt_nc.plot_animation(FILE_NAME = 'data/test1_noncyclic_cube', ADD_TIME = True, IF_CUBE = True)
+#tc_opt_nc.plot_animation(FILE_NAME = 'data/test2_noncyclic_cube', ADD_TIME = True, IF_CUBE = True)
 
