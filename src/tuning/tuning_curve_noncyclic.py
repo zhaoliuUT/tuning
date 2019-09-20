@@ -74,7 +74,7 @@ class TuningCurve_Noncyclic:
             tuning = tuning.reshape((1,tuning.size))
         if np.any(tuning <0):
             raise Exception('Wrong input for tuning function!')
-        if weight.size != tuning.shape[0] or np.any(weight < 0) or np.fabs(np.sum(weight) - 1.0)>1e-4:
+        if weight.size != tuning.shape[1] or np.any(weight < 0) or np.fabs(np.sum(weight) - 1.0)>1e-4:
             raise Exception('Wrong input for weights!')
         # hard to constrain on convolution now...
         if conv is None:
