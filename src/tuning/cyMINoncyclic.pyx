@@ -46,10 +46,16 @@ cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] ra
 
     cdef int i,j,k,l,p
     cdef double mymax = 0
+    cdef int INT_MAX = <int>((<unsigned int>-1)>>1)
+    cdef int INT_MIN = (-INT_MAX-1)
+    # exp(INT_MIN) = 0
 
     for p in range(numNeuro):
         for j in range(numBin):
-            texp[p, j] = count[p]*log(rate[p,j]) - rate[p,j] if rate[p,j] else 0
+            if count[p] > 0:
+                texp[p, j] = count[p]*log(rate[p,j]) - rate[p,j] if rate[p,j] else INT_MIN
+            else:
+                texp[p, j] = -rate[p,j]
             
     cdef double info = 0
     cdef double tmp_sum_l = 0
@@ -346,12 +352,18 @@ cdef double count_coeff_s_arimoto(int s, int numBin, int numNeuro, double[:,:] r
 
     cdef int i, p
     cdef double prod_p_s, qexp_s, mymax
+    cdef int INT_MAX = <int>((<unsigned int>-1)>>1)
+    cdef int INT_MIN = (-INT_MAX-1)
+    # exp(INT_MIN) = 0
     
     #     mymax = 1.0
     for i in range(numBin):
         rexp[i] = 0
         for p in range(numNeuro):
-            rexp[i] += count[p]*log(rate[p,i]) - rate[p,i] if rate[p,i] else 0           
+            if count[p] > 0:
+                rexp[i] += count[p]*log(rate[p,i]) - rate[p,i] if rate[p,i] else INT_MIN
+            else:
+                rexp[i] += -rate[p,i]
     #         if rexp[i] > mymax:
     #             mymax = rexp[i]    
     
