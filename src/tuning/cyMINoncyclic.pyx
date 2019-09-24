@@ -328,12 +328,13 @@ def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] we
 # ----------Blahut-Arimoto Algorithm by partial sum--------
 #@cython.boundscheck(False)
 #@cython.cdivision(True)
-cdef double count_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate,
+cdef double count_coeff_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate,
                                    double[:] weight,\
-                                   int[:] count, double[:] rexp) nogil: 
+                                   int[:] count, double[:] rexp) nogil:
     '''
     For a fixed r=(r_1, ..., r_P) and fixed s = 1,...,numBin, 
-    compute P_s(r) * log( w_s / S_s(r) )
+    compute P_s(r) * log( 1 / S_s(r) )
+    (part of c_j in the Blahut paper)
     '''
     # s is same as j = 1,...,numBin in the notes)
     # rate: numNeuro*numBin
@@ -362,19 +363,22 @@ cdef double count_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] ra
     qexp_s = 0
     for i in range(numBin):
         qexp_s += weight[i]*exp(rexp[i]) #weight[i]*exp(rexp[i] - mymax)
-    qexp_s = weight[s]*exp(rexp[s])/qexp_s #weight[s]*exp(rexp[s] - mymax)/qexp_s
+    # old version for probability: qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    qexp_s = exp(rexp[s])/qexp_s if qexp_s else 0
    
     return prod_p_s * log(qexp_s) if qexp_s else 0
     
 
-def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight, 
-                       double[:] conv, double tau, 
-                       int threshold = 50, int my_num_threads = 4):
+def partial_sum_coeff_arimoto(double[:] coeff, double[:,:] tuning, double[:] weight,
+                              double[:] slope,
+                              double[:] conv, double tau,
+                              int threshold = 50, int my_num_threads = 4):
     '''Compute arimoto update for one iteration.'''
     # conv is old stim...
     # weight_new: computed new weights(probability)
     # tuing: numNeuro*numBin
     # weight: numBin, sum up to one
+    # slope: numNeuro, positive (same as 's' in Blahut paper)
     # conv: numBin, weighted sum is one.
     
     cdef int numNeuro = tuning.shape[0]
@@ -383,7 +387,7 @@ def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:]
     cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
     cdef Py_ssize_t i,j,l,k,m,p,s
     
-    cdef double[:,:] weight_new_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     cdef double[:,:] rexp_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     
     cdef double this_count_s = 0
@@ -407,32 +411,25 @@ def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:]
         for idx in prange(num_comb):
             #count = count_arr[idx,:]
             for s in range(numBin):
-                this_count_s = count_prob_s_arimoto(s,numBin,numNeuro, rate, weight,\
+                this_count_s = count_coeff_s_arimoto(s,numBin,numNeuro, rate, weight,\
                                                      count_arr[idx,:], rexp_all[tid, :])
                 
-                weight_new_all[tid, s] += this_count_s
+                coeff_all[tid, s] += this_count_s
                 
-    
-        
-    cdef double prob_sum = 0
     for m in range(numBin): 
-        weight_new[m] = 0
+        coeff[m] = 0
         for tid in range(my_num_threads):
-            weight_new[m] += weight_new_all[tid, m]
-        weight_new[m] = exp(weight_new[m])
-        
-    for m in range(numBin):
-        prob_sum += weight_new[m] 
-
-    for m in range(numBin): 
-        weight_new[m] /= prob_sum
-    return 0
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
 
 # ----------Blahut-Arimoto Algorithm by Monte Carlo--------
 
 #@cython.boundscheck(False)
 #@cython.cdivision(True)
-cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,\
+cdef double compute_coeff_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,\
                                    int[:] count, double[:] rexp) nogil: 
     # for a fixed s in range(numBin)(s is same as m = 1,...,M in the notes)
     # rate: numNeuro*numBin
@@ -455,7 +452,8 @@ cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] 
     for i in range(numBin):
         qexp_s += weight[i]*exp(rexp[i])
         
-    qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    # old version for probability: qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    qexp_s = exp(rexp[s])/qexp_s if qexp_s else 0
     #     qexp_s = 0
     #     for i in range(numBin):
     #         qexp_s += weight[i]*exp(rexp[i] - mymax)
@@ -466,14 +464,16 @@ cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] 
     
     return mean_s
 
-def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
-                    double[:] conv, double tau, int numIter, int my_num_threads = 4):
+def mc_coeff_arimoto(double[:] coeff, double[:,:] tuning, double[:] weight, double[:] slope,
+                     double[:] conv, double tau, int numIter, int my_num_threads = 4):
     '''Compute arimoto update for one iteration.'''
     # conv is old stim...
     # weight_new: computed new weights(probability)
     # tuing: numNeuro*numBin
     # weight: numBin, sum up to one
+    # slope: numNeuro, positive
     # conv: numBin, weighted sum is one.
+    # coeff: numBin
     
     cdef int numNeuro = tuning.shape[0]
     cdef int numBin = tuning.shape[1]
@@ -482,7 +482,7 @@ def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
     cdef Py_ssize_t i,j,l,k,m,p,s
     cdef Py_ssize_t n_iter
     
-    cdef double[:,:] weight_new_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     cdef double[:,:] rexp_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     
     cdef double this_mean_s = 0
@@ -510,27 +510,17 @@ def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
         for n_iter in prange(numIter):
             for s in range(numBin):
                 # samples conditioning on s: poisson_samples[n_iter,:,s]
-                this_mean_s = compute_prob_s_arimoto(s,numBin,numNeuro, rate, weight,\
+                this_mean_s = compute_coeff_s_arimoto(s,numBin,numNeuro, rate, weight,\
                                                      poisson_samples[n_iter,:,s], rexp_all[tid, :])
                 
-                weight_new_all[tid, s] += this_mean_s
+                coeff_all[tid, s] += this_mean_s
                 
-    
-        
-    cdef double prob_sum = 0
     for m in range(numBin): 
-        weight_new[m] = 0
+        coeff[m] = 0
         for tid in range(my_num_threads):
-            weight_new[m] += weight_new_all[tid, m]
-        weight_new[m] /= numIter
-        weight_new[m] = exp(weight_new[m])
-        
-    for m in range(numBin):
-        prob_sum += weight_new[m] 
-#         print weight_new[m]
-#     print prob_sum
-    for m in range(numBin): 
-        weight_new[m] /= prob_sum
-    return 0
-
-
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] /= numIter
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
