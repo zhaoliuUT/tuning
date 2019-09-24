@@ -28,7 +28,7 @@ cdef double log_factorial(int x) nogil:
 cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] rate, double[:] weight,
                                         int[:] count,\
                                         double[:,:] grad, double[:,:] texp, double[:] prod_p,
-                                        double[:] prod_s) nogil: 
+                                        double[:] log_prod_s) nogil:
     '''Given r = (r_1,...,r_P), compute I(r) = -sum_j[w_j*P_j(r)S_j(r)],
     and update gradI by adding the term corresponding to r.
     '''
@@ -56,19 +56,28 @@ cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] ra
     
     for j in range(numBin):
         prod_p[j] = 0
-        prod_s[j] = 0
+        log_prod_s[j] = 0
         
         for p in range(numNeuro):
             prod_p[j] += texp[p,j] - log_factorial(count[p])
         prod_p[j] = exp(prod_p[j])   
-        
+
+        mymax = 0 # specific to j
+        for l in range(numBin):
+            tmp_sum_l = 0
+            for k in range(numNeuro):
+                tmp_sum_l += texp[k,l] - texp[k,j]
+            if tmp_sum_l > mymax:
+                mymax = tmp_sum_l
+
         for l in range(numBin):
             tmp_sum_l = 0
             for k in range(numNeuro):               
                 tmp_sum_l += texp[k,l] - texp[k,j]
-            prod_s[j] += weight[l]*exp(tmp_sum_l)
+            log_prod_s[j] += weight[l]*exp(tmp_sum_l - mymax)
+        log_prod_s[j] = log(log_prod_s[j]) + mymax
             
-        info += weight[j]*prod_p[j]*log(prod_s[j])
+        info += weight[j]*prod_p[j]*log_prod_s[j] if prod_p[j] else 0
         
     info *= (-1)
     
@@ -76,10 +85,10 @@ cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] ra
     cdef double tmp_grad_kl = 0
     for k in range(numNeuro):
         for l in range(numBin):
-            tmp_grad_kl = weight[l]*prod_p[l]*log(prod_s[l])
+            tmp_grad_kl = weight[l]*prod_p[l]*log_prod_s[l] if prod_p[l] else 0
             #grad[k,l] = weight[l]*prod_p[l]*log(prod_s[l])
             for j in range(numBin):
-                tmp_grad_kl += weight[j]*prod_p[j]*weight[l]/prod_s[l]
+                tmp_grad_kl += weight[j]*prod_p[j]*weight[l]/exp(log_prod_s[l]) if prod_p[j] else 0
                 #grad[k,l] += weight[j]*prod_p[j]*weight[l]/prod_s[l]
             #grad[k,l] *= (1 - count[k]/rate[k,l]) if rate[k,l] else 1
             grad[k,l] += (1 - count[k]/rate[k,l])*tmp_grad_kl if rate[k,l] else tmp_grad_kl
