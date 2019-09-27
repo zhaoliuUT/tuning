@@ -459,7 +459,7 @@ class TuningCurveOptimizer_Noncyclic:
         """
         
         
-        res_list = np.load(filename+'.npy').item()
+        res_list = np.load(filename+'.npy', allow_pickle=True).item()
         
         tc = TuningCurve_Noncyclic(res_list['x'][0], res_list['weight'][0], res_list['conv'], res_list['tau'], \
                                    res_list['obj'][0], res_list['grad'][0]) 
