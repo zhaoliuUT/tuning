@@ -126,11 +126,11 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
             ax_f.spines['right'].set_visible(False)
             ax_f.yaxis.set_ticks_position('left')
             ax_f.xaxis.set_ticks_position('bottom')
-            ax_f.arrow(0,0,1,0,fc='k', ec='k', lw =0.1,head_width=0.05, head_length=0.02,overhang = 0.1,\
-                       length_includes_head= False, clip_on = False)
-            ax_f.arrow(0,0,0,radius,fc='k', ec='k', lw =0.1,head_width=0.01*radius, head_length=0.1*radius,\
-                       overhang = 0.1*radius,\
-                       length_includes_head= False, clip_on = False)
+            #ax_f.arrow(0,0,1,0,fc='k', ec='k', lw =0.1,head_width=0.05, head_length=0.02,overhang = 0.1,\
+            #           length_includes_head= False, clip_on = False)
+            #ax_f.arrow(0,0,0,radius,fc='k', ec='k', lw =0.1,head_width=0.01*radius, head_length=0.1*radius,\
+            #           overhang = 0.1*radius,\
+            #           length_includes_head= False, clip_on = False)
         
 
     #     plt.tight_layout()#pad = 1.5
