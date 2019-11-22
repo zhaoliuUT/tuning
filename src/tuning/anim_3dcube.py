@@ -33,7 +33,7 @@ class Arrow3D(FancyArrowPatch):
         FancyArrowPatch.draw(self, renderer)
 
 def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, radius = 1,\
-                     INCLUDE_FUN = True, FILE_NAME = "", ADD_TIME = True, interval = 1000):
+                     INCLUDE_FUN = True, INCLUDE_WEIGHT = True, FILE_NAME = "", ADD_TIME = True, interval = 1000):
     
     '''When numNeuro = 3, plot points in a cube.'''
     ''' the 'radius' argument acts the same way as maxium FP.'''
@@ -61,13 +61,18 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
         fig = plt.figure(figsize = (12,6))
 
         gs0 = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
-        gs01 = gridspec.GridSpecFromSubplotSpec(3,1,subplot_spec=gs0[1])
+        if INCLUDE_WEIGHT:
+            gs01 = gridspec.GridSpecFromSubplotSpec(4,1,subplot_spec=gs0[1])
+        else:
+            gs01 = gridspec.GridSpecFromSubplotSpec(4,1,subplot_spec=gs0[1])
 
         ax_cube = fig.add_subplot(gs0[0], projection='3d')
         ax_cube.set_aspect("equal")
         ax_f1 = fig.add_subplot(gs01[0])
         ax_f2 = fig.add_subplot(gs01[1])
         ax_f3 = fig.add_subplot(gs01[2])
+        if INCLUDE_WEIGHT:
+            ax_w = fig.add_subplot(gs01[3])
     else:
         fig = plt.figure(figsize = (8,8))
         ax_cube = fig.gca(projection='3d')
@@ -131,8 +136,8 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
             #ax_f.arrow(0,0,0,radius,fc='k', ec='k', lw =0.1,head_width=0.01*radius, head_length=0.1*radius,\
             #           overhang = 0.1*radius,\
             #           length_includes_head= False, clip_on = False)
-        
-
+        if INCLUDE_WEIGHT:
+            barcollection = ax_w.bar(np.arange(num_pts),weights_list[0], color = 'steelblue')
     #     plt.tight_layout()#pad = 1.5
     #     gs0.tight_layout(fig)
     #     def init():     
@@ -159,6 +164,10 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
             line1.set_data(x1, y1)
             line2.set_data(x2, y2)
             line3.set_data(x3, y3)
+
+        if INCLUDE_WEIGHT:
+            for j, b in enumerate(barcollection):
+                b.set_height(weights_list[i][j])
             
         if info_list is not None:
             info_txt.set_text("MI = %.4f"%info_list[i])
