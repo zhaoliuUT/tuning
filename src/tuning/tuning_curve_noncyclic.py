@@ -1,6 +1,7 @@
 import time, sys, os, copy
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib import animation
 from cyMINoncyclic import *
 from anim_3dcube import *
@@ -452,6 +453,7 @@ class TuningCurve_Noncyclic:
                           XTICKS_IDX_LIST = [], VAR_LABEL =  "", VAR_TXT_LIST = [], \
                           ALIGN = "row",\
                           INCLUDE_INFO = True, INCLUDE_RATE = False, INCLUDE_GRAD = False,\
+                          INCLUDE_WEIGHT = True,\
                           index_list = [], interval=1000, dt = 1):
         # ALIGN = "row" or "col" (default = row)
         """Plot animation for a list of tuning curves. Showing each population in 
@@ -542,32 +544,27 @@ class TuningCurve_Noncyclic:
         var_texts = []
 
         grad_max = np.max(np.array([np.max(np.fabs(tc.grad)) for tc in tc_list]))
+        weight_max = np.max(np.array([np.max(tc.weight) for tc in tc_list]))
       
         tau = np.max(np.array([np.max(tc.tau) for tc in tc_list]))  
         colors = ['steelblue',  'seagreen', 'crimson', 'gray', 'm','gold', 'k']*10
         
         if ALIGN == "row":
             n_rows = numNeuro
-            n_cols = 1
-            if INCLUDE_RATE:
-                n_cols += 1
-            if INCLUDE_GRAD:
-                n_cols += 1
+            n_cols = 1 + INCLUDE_RATE + INCLUDE_GRAD
         else: #ALIGN == "col"
             n_cols = numNeuro
-            n_rows = 1
-            if INCLUDE_RATE:
-                n_rows += 1
-            if INCLUDE_GRAD:
-                n_rows += 1               
+            n_rows = 1 + INCLUDE_RATE + INCLUDE_GRAD
         if INCLUDE_INFO:
             n_cols += 1
+        if INCLUDE_WEIGHT:
+            n_rows += 1
             
-        rate_idx = 2   
+        rate_idx = 1
         if INCLUDE_RATE:
-            grad_idx = 3
-        else:
             grad_idx = 2
+        else:
+            grad_idx = 1
         #print n_rows, n_cols
         
         fig = plt.figure(figsize = (n_cols*6,n_rows*6)) #(numNeuro*10,3*6)
@@ -582,23 +579,34 @@ class TuningCurve_Noncyclic:
             ax_info.grid()
             ax_info.set_title('Mutual Information', fontsize = 14)
             line_info, = ax_info.plot([],[])
-        
+
+        if INCLUDE_WEIGHT:
+            gs0 = gridspec.GridSpec(2, 2, width_ratios=[n_cols-1, 1], height_ratios = [n_rows-1,1])
+            ax_weight = fig.add_subplot(gs0[1,0])
+            if ALIGN == "row":
+                gs00 = gridspec.GridSpecFromSubplotSpec(numNeuro, (1 + INCLUDE_RATE + INCLUDE_GRAD),
+                                                        subplot_spec=gs0[0])
+            else: #ALIGN == "col"
+                gs00 = gridspec.GridSpecFromSubplotSpec((1 + INCLUDE_RATE + INCLUDE_GRAD),numNeuro,
+                                                        subplot_spec=gs0[0])
+        else:
+            gs00 = gridspec.GridSpec(1, 2, width_ratios=[n_cols-1, 1])
         
         for k in range(numNeuro):
              # row or col alignment
             
             if ALIGN == "row":
-                ax1 = fig.add_subplot(n_rows, n_cols, n_cols*k+1, xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))        
+                ax1 = fig.add_subplot(gs00[k,0], xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))
                 if INCLUDE_RATE:
-                    ax2 = fig.add_subplot(n_rows, n_cols,n_cols*k+rate_idx , xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
+                    ax2 = fig.add_subplot(gs00[k, rate_idx], xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
                 if INCLUDE_GRAD:
-                    ax3 = fig.add_subplot(n_rows, n_cols, n_cols*k+grad_idx , xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
+                    ax3 = fig.add_subplot(gs00[k, grad_idx], xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
             else: #ALIGN == "col"
-                ax1 = fig.add_subplot(n_rows, n_cols, k+1, xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))        
+                ax1 = fig.add_subplot(gs00[0,k], xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))
                 if INCLUDE_RATE:
-                    ax2 = fig.add_subplot(n_rows, n_cols,n_cols+k+1 , xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
+                    ax2 = fig.add_subplot(gs00[rate_idx, k], xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
                 if INCLUDE_GRAD:
-                    ax3 = fig.add_subplot(n_rows, n_cols, (grad_idx-1)*n_cols+k+1 , xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
+                    ax3 = fig.add_subplot(gs00[grad_idx, k], xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
 
             if k ==0:
                 ax1.set_title('Tuning Curve', fontsize = 14)
@@ -636,7 +644,9 @@ class TuningCurve_Noncyclic:
         else:
             infotxt = ax_tuning[0].text(0.02, 0.85, '', transform=ax_tuning[0].transAxes, fontsize = 16)
         
-        
+        if INCLUDE_WEIGHT:
+            barcollection = ax_weight.bar(np.arange(numBin), tc_list[0].weight)
+            ax_weight.set_ylim(0,weight_max+0.05)
         #if numBin>10 and numBin%2 ==0:
         #    numBinwidth = 2*int(numBin/10)
         #else:
@@ -722,6 +732,9 @@ class TuningCurve_Noncyclic:
             if INCLUDE_INFO:
                 line_info.set_data(index_list[0:i+1], info_list[0:i+1])
             infotxt.set_text('MI = %.4f' % curr_info)
+            if INCLUDE_WEIGHT:
+                for j, b in enumerate(barcollection):
+                    b.set_height(curr_weight[j])
 
             for p in range(numNeuro):
                 yy_p = [ [curr_tuning[p][j], curr_tuning[p][j+1]] for j in range(0, numBin-1) ] 
@@ -802,7 +815,7 @@ class TuningCurve_Noncyclic:
         
         
     @staticmethod 
-    def animation_tc_list_cube(tc_list, INCLUDE_FUN = True,\
+    def animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=True, \
                                FILE_NAME = "", ADD_TIME = True, interval = 1000):
         X_list = []
         Y_list = []
@@ -825,7 +838,8 @@ class TuningCurve_Noncyclic:
             radius = max(radius, np.amax(tc_list[i].tuning))
         radius = np.ceil(radius)
         anim3dplots(X_list, Y_list, Z_list, weights_list, info_list, radius = radius,\
-                    INCLUDE_FUN = INCLUDE_FUN, FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, \
+                    INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, \
+                    FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, \
                     interval = interval)
 
 
