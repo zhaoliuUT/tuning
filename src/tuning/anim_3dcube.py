@@ -73,6 +73,8 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
         ax_f3 = fig.add_subplot(gs01[2])
         if INCLUDE_WEIGHT:
             ax_w = fig.add_subplot(gs01[3])
+            weight_max = np.max(np.array(weights_list))
+            ax_w.set_ylim(0, weight_max + 0.05)
     else:
         fig = plt.figure(figsize = (8,8))
         ax_cube = fig.gca(projection='3d')

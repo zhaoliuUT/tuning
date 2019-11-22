@@ -464,7 +464,7 @@ class TuningCurveOptimizer_Noncyclic:
         
         
     def plot_animation(self, FILE_NAME = "", ADD_TIME = True, XTICKS_IDX_LIST = [], \
-                       ALIGN = "row", INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, \
+                       ALIGN = "row", INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, INCLUDE_WEIGHT=True,\
                        interval = 1000, dt = 1, IF_CUBE = False, EVALUATE_ALL = False):
         tc_list = []
         # evaluate all the mutual information for every tuning curve during iterations
@@ -493,7 +493,7 @@ class TuningCurveOptimizer_Noncyclic:
             steps_list = steps_list[info_arr != None]
     
         if IF_CUBE:
-            TuningCurve_Noncyclic.animation_tc_list_cube(tc_list, INCLUDE_FUN = True, \
+            TuningCurve_Noncyclic.animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=INCLUDE_WEIGHT, \
                                                          FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, \
                                                          interval = interval)
         else:
@@ -501,7 +501,7 @@ class TuningCurveOptimizer_Noncyclic:
                                                 XTICKS_IDX_LIST = XTICKS_IDX_LIST, \
                                                 VAR_LABEL =  "", VAR_TXT_LIST = [], \
                                                 ALIGN = ALIGN, INCLUDE_RATE = INCLUDE_RATE, \
-                                                INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO,\
+                                                INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO, INCLUDE_WEIGHT=INCLUDE_WEIGHT,\
                                                 index_list = list(steps_list), interval= interval, dt = dt)
 
         
