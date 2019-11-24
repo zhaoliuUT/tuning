@@ -61,10 +61,8 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
         fig = plt.figure(figsize = (12,6))
 
         gs0 = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
-        if INCLUDE_WEIGHT:
-            gs01 = gridspec.GridSpecFromSubplotSpec(4,1,subplot_spec=gs0[1])
-        else:
-            gs01 = gridspec.GridSpecFromSubplotSpec(4,1,subplot_spec=gs0[1])
+        n_cols = 3 + INCLUDE_WEIGHT
+        gs01 = gridspec.GridSpecFromSubplotSpec(n_cols,1,subplot_spec=gs0[1])
 
         ax_cube = fig.add_subplot(gs0[0], projection='3d')
         ax_cube.set_aspect("equal")
@@ -149,21 +147,26 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
     #         scat.set_array(color_arr)
         scat._offsets3d = juggle_axes(X_list[i], Y_list[i], Z_list[i],'z') #'z',color=color_set[0],s= 100
         scat.set_sizes(np.ones(num_pts)*100)
-        
-        for txt, new_x, new_y, new_z, weight in zip(txt_list, X_list[i], Y_list[i], Z_list[i],weights_list[i]):
-            # animating Text in 3D proved to be tricky. Tip of the hat to @ImportanceOfBeingErnest
-            # for this answer https://stackoverflow.com/a/51579878/1356000
-            x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
+        if PLOT_WEIGHTS:
+            for txt, new_x, new_y, new_z, weight in zip(txt_list, X_list[i], Y_list[i], Z_list[i],weights_list[i]):
+                # animating Text in 3D proved to be tricky. Tip of the hat to @ImportanceOfBeingErnest
+                # for this answer https://stackoverflow.com/a/51579878/1356000
+                x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
                                               ax_cube.get_proj())
-            txt.set_position((x_,y_))
-            txt.set_text('%.2f'%weight)
-        if INCLUDE_FUN:
+                txt.set_position((x_,y_))
+                txt.set_text('%.2f'%weight)
+        if INCLUDE_FUN and (weights_list is not None):
             x1, y1 = pc_fun_weights(X_list[i],weights_list[i])
             x2, y2 = pc_fun_weights(Y_list[i],weights_list[i])
             x3, y3 = pc_fun_weights(Z_list[i],weights_list[i])
             line1.set_data(x1, y1)
             line2.set_data(x2, y2)
             line3.set_data(x3, y3)
+        if INCLUDE_FUN and (weights_list is None):
+            line1.set_data(1.0*np.arange(num_pts)/num_pts, X_list[i])
+            line2.set_data(1.0*np.arange(num_pts)/num_pts, Y_list[i])
+            line3.set_data(1.0*np.arange(num_pts)/num_pts, Z_list[i])
+
 
         if INCLUDE_WEIGHT:
             for j, b in enumerate(barcollection):
