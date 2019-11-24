@@ -107,13 +107,11 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
 
     ax_cube.view_init(azim = 30)
 
-    #     color_arr = np.random.random(num_pts) # not knowing meaning
-    color_arr = np.arange(num_pts) # not knowing meaning
-    #     print color_arr
-    #     crimson_rgb = colors.hex2color(colors.cnames['crimson'])
-    #     color_arr = np.tile(crimson_rgb,num_pts).reshape(num_pts,3)
+    # color_arr = np.arange(num_pts)
+    cmap = plt.cm.get_cmap('nipy_spectral', num_pts) # other colormap names: cubehelix,viridis,...
+    color_arr = np.array([cmap(i) for i in range(num_pts)])
     
-    scat = ax_cube.scatter(X_list[0], Y_list[0], Z_list[0],  c = color_arr,s= 100)
+    scat = ax_cube.scatter(X_list[0], Y_list[0], Z_list[0],  c = color_arr,s= 100, edgecolor='k')
     if info_list is not None:
         x0, y0, _ = proj3d.proj_transform(0,-0.3*radius, -1.5*radius,ax_cube.get_proj())
         info_txt = ax_cube.text2D(x0,y0,"", fontsize = 15)
@@ -139,7 +137,7 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, r
             #           overhang = 0.1*radius,\
             #           length_includes_head= False, clip_on = False)
         if INCLUDE_WEIGHT:
-            barcollection = ax_w.bar(np.arange(num_pts),weights_list[0], color = 'steelblue')
+            barcollection = ax_w.bar(np.arange(num_pts),weights_list[0], color = color_arr)
     #     plt.tight_layout()#pad = 1.5
     #     gs0.tight_layout(fig)
     #     def init():     
