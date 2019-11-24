@@ -33,7 +33,7 @@ class Arrow3D(FancyArrowPatch):
         FancyArrowPatch.draw(self, renderer)
 
 def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, 
-                radius = 1, weight_tol = 1e-3, cmap_name = 'nipy_spectral',
+                radius = 1, weight_tol = 1e-3, cmap_name = 'nipy_spectral', shuffle_colors = False,
                 INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
                 FILE_NAME = "", ADD_TIME = True, interval = 1000):
     
@@ -123,7 +123,8 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
     # color_arr = np.arange(num_pts)
     cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
     color_arr = np.array([cmap(i) for i in range(num_pts)])
-    np.random.shuffle(color_arr)
+    if shuffle_colors:
+        np.random.shuffle(color_arr)
     
     scat = ax_cube.scatter(X_list[0], Y_list[0], Z_list[0],  c = color_arr,s= 100, edgecolor='k', alpha=1)
     if info_list is not None:
