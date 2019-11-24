@@ -463,9 +463,13 @@ class TuningCurveOptimizer_Noncyclic:
         
         
         
-    def plot_animation(self, FILE_NAME = "", ADD_TIME = True, XTICKS_IDX_LIST = [], \
-                       ALIGN = "row", INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, INCLUDE_WEIGHT=True,\
-                       interval = 1000, dt = 1, IF_CUBE = False, EVALUATE_ALL = False):
+    def plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000, IF_CUBE = False, EVALUATE_ALL = False,
+                       dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
+                       INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, # options for non-cube animation
+                       INCLUDE_WEIGHT=True,# option for both
+                       INCLUDE_FUN = True, INCLUDE_WEIGHT_BAR = True, # options for cube animation
+                       weight_tol = 1e-3, cmap_name = 'nipy_spectral', # options for cube animation
+                       ):
         tc_list = []
         # evaluate all the mutual information for every tuning curve during iterations
         for i in range(self.res_len):
@@ -493,16 +497,18 @@ class TuningCurveOptimizer_Noncyclic:
             steps_list = steps_list[info_arr != None]
     
         if IF_CUBE:
-            TuningCurve_Noncyclic.animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=INCLUDE_WEIGHT, \
-                                                         FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, \
-                                                         interval = interval)
+            TuningCurve_Noncyclic.animation_tc_list_cube(
+                tc_list, FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, interval = interval,
+                INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
+                INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR, weight_tol = weight_tol, cmap_name = cmap_name,
+            )
         else:
-            TuningCurve_Noncyclic.animation_tc_list(tc_list, FILE_NAME, ADD_TIME, FP = self.fp, FM = self.fm, \
-                                                XTICKS_IDX_LIST = XTICKS_IDX_LIST, \
-                                                VAR_LABEL =  "", VAR_TXT_LIST = [], \
-                                                ALIGN = ALIGN, INCLUDE_RATE = INCLUDE_RATE, \
-                                                INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO, INCLUDE_WEIGHT=INCLUDE_WEIGHT,\
-                                                index_list = list(steps_list), interval= interval, dt = dt)
+            TuningCurve_Noncyclic.animation_tc_list(
+                tc_list, FILE_NAME, ADD_TIME, FP = self.fp, FM = self.fm, interval= interval, dt = dt,
+                index_list = list(steps_list), XTICKS_IDX_LIST = XTICKS_IDX_LIST, VAR_LABEL =  "",
+                VAR_TXT_LIST = [], ALIGN = ALIGN, INCLUDE_RATE = INCLUDE_RATE,
+                INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
+            )
 
         
         

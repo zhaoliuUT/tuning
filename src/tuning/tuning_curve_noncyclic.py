@@ -815,7 +815,8 @@ class TuningCurve_Noncyclic:
         
         
     @staticmethod 
-    def animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=True, \
+    def animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR = True,
+                               weight_tol = 1e-3, cmap_name = 'nipy_spectral',
                                FILE_NAME = "", ADD_TIME = True, interval = 1000):
         X_list = []
         Y_list = []
@@ -839,6 +840,8 @@ class TuningCurve_Noncyclic:
         radius = np.ceil(radius)
         anim3dplots(X_list, Y_list, Z_list, weights_list, info_list, radius = radius,\
                     INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, \
+                    INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR, \
+                    weight_tol = weight_tol, cmap_name = cmap_name,\
                     FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, \
                     interval = interval)
 
