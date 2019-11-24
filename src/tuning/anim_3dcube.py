@@ -125,7 +125,7 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
     color_arr = np.array([cmap(i) for i in range(num_pts)])
     np.random.shuffle(color_arr)
     
-    scat = ax_cube.scatter(X_list[0], Y_list[0], Z_list[0],  c = color_arr,s= 100, edgecolor='k')
+    scat = ax_cube.scatter(X_list[0], Y_list[0], Z_list[0],  c = color_arr,s= 100, edgecolor='k', alpha=1)
     if info_list is not None:
         x0, y0, _ = proj3d.proj_transform(0,-0.3*radius, -1.5*radius,ax_cube.get_proj())
         info_txt = ax_cube.text2D(x0,y0,"", fontsize = 15)
