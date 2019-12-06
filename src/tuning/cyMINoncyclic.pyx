@@ -551,13 +551,13 @@ def mc_coeff_arimoto(double[:] coeff, double[:,:] tuning, double[:] weight, doub
 cdef double compute_mean_grad_s_gaussian(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,
                                          double[:,:] inv_cov_mat,
                                          double[:] response,
-                                         double[:,:,:] tmp_grad, double[:] quad) nogil: 
+                                         double[:,:,:] tmp_grad, double[:] quad) nogil:
     # for a fixed s in range(numBin)(s is same as m in the notes)
     # rate: numNeuro*numBin
     # weight: numBin (sum up to 1)
     # inv_cov_mat: numNeuro*numNeuro
     # response: numNeuro (specific to s, gaussian distribution conditioning on s)
-    
+
     # tmp_grad: numBin*numNeuro*numBin, (will reuse in grad, so store for each s)
     # quad: numBin,  (specific to s)
        
