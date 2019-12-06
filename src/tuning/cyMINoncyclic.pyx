@@ -11,6 +11,10 @@ from cython.parallel import parallel, prange, threadid
 
 from itertools import product, combinations,permutations
 
+#---------------------------------------
+#---------- Poisson Model --------------
+#---------------------------------------
+
 # ----------Compute info and grad by Prtial Sum --------
 
 cdef double log_factorial(int x) nogil:
@@ -46,10 +50,16 @@ cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] ra
 
     cdef int i,j,k,l,p
     cdef double mymax = 0
+    cdef int INT_MAX = <int>((<unsigned int>-1)>>1)
+    cdef int INT_MIN = (-INT_MAX-1)
+    # exp(INT_MIN) = 0
 
     for p in range(numNeuro):
         for j in range(numBin):
-            texp[p, j] = count[p]*log(rate[p,j]) - rate[p,j] if rate[p,j] else 0
+            if count[p] > 0:
+                texp[p, j] = count[p]*log(rate[p,j]) - rate[p,j] if rate[p,j] else INT_MIN
+            else:
+                texp[p, j] = -rate[p,j]
             
     cdef double info = 0
     cdef double tmp_sum_l = 0
@@ -328,12 +338,13 @@ def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] we
 # ----------Blahut-Arimoto Algorithm by partial sum--------
 #@cython.boundscheck(False)
 #@cython.cdivision(True)
-cdef double count_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate,
+cdef double count_coeff_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate,
                                    double[:] weight,\
-                                   int[:] count, double[:] rexp) nogil: 
+                                   int[:] count, double[:] rexp) nogil:
     '''
     For a fixed r=(r_1, ..., r_P) and fixed s = 1,...,numBin, 
-    compute P_s(r) * log( w_s / S_s(r) )
+    compute P_s(r) * log( 1 / S_s(r) )
+    (part of c_j in the Blahut paper)
     '''
     # s is same as j = 1,...,numBin in the notes)
     # rate: numNeuro*numBin
@@ -345,12 +356,18 @@ cdef double count_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] ra
 
     cdef int i, p
     cdef double prod_p_s, qexp_s, mymax
+    cdef int INT_MAX = <int>((<unsigned int>-1)>>1)
+    cdef int INT_MIN = (-INT_MAX-1)
+    # exp(INT_MIN) = 0
     
     #     mymax = 1.0
     for i in range(numBin):
         rexp[i] = 0
         for p in range(numNeuro):
-            rexp[i] += count[p]*log(rate[p,i]) - rate[p,i] if rate[p,i] else 0           
+            if count[p] > 0:
+                rexp[i] += count[p]*log(rate[p,i]) - rate[p,i] if rate[p,i] else INT_MIN
+            else:
+                rexp[i] += -rate[p,i]
     #         if rexp[i] > mymax:
     #             mymax = rexp[i]    
     
@@ -362,19 +379,22 @@ cdef double count_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] ra
     qexp_s = 0
     for i in range(numBin):
         qexp_s += weight[i]*exp(rexp[i]) #weight[i]*exp(rexp[i] - mymax)
-    qexp_s = weight[s]*exp(rexp[s])/qexp_s #weight[s]*exp(rexp[s] - mymax)/qexp_s
+    # old version for probability: qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    qexp_s = exp(rexp[s])/qexp_s if qexp_s else 0
    
     return prod_p_s * log(qexp_s) if qexp_s else 0
     
 
-def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight, 
-                       double[:] conv, double tau, 
-                       int threshold = 50, int my_num_threads = 4):
+def partial_sum_coeff_arimoto(double[:] coeff, double[:,:] tuning, double[:] weight,
+                              double[:] slope,
+                              double[:] conv, double tau,
+                              int threshold = 50, int my_num_threads = 4):
     '''Compute arimoto update for one iteration.'''
     # conv is old stim...
     # weight_new: computed new weights(probability)
     # tuing: numNeuro*numBin
     # weight: numBin, sum up to one
+    # slope: numNeuro, positive (same as 's' in Blahut paper)
     # conv: numBin, weighted sum is one.
     
     cdef int numNeuro = tuning.shape[0]
@@ -383,7 +403,7 @@ def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:]
     cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
     cdef Py_ssize_t i,j,l,k,m,p,s
     
-    cdef double[:,:] weight_new_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     cdef double[:,:] rexp_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     
     cdef double this_count_s = 0
@@ -407,32 +427,25 @@ def partial_sum_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:]
         for idx in prange(num_comb):
             #count = count_arr[idx,:]
             for s in range(numBin):
-                this_count_s = count_prob_s_arimoto(s,numBin,numNeuro, rate, weight,\
+                this_count_s = count_coeff_s_arimoto(s,numBin,numNeuro, rate, weight,\
                                                      count_arr[idx,:], rexp_all[tid, :])
                 
-                weight_new_all[tid, s] += this_count_s
+                coeff_all[tid, s] += this_count_s
                 
-    
-        
-    cdef double prob_sum = 0
     for m in range(numBin): 
-        weight_new[m] = 0
+        coeff[m] = 0
         for tid in range(my_num_threads):
-            weight_new[m] += weight_new_all[tid, m]
-        weight_new[m] = exp(weight_new[m])
-        
-    for m in range(numBin):
-        prob_sum += weight_new[m] 
-
-    for m in range(numBin): 
-        weight_new[m] /= prob_sum
-    return 0
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
 
 # ----------Blahut-Arimoto Algorithm by Monte Carlo--------
 
 #@cython.boundscheck(False)
 #@cython.cdivision(True)
-cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,\
+cdef double compute_coeff_s_arimoto(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,\
                                    int[:] count, double[:] rexp) nogil: 
     # for a fixed s in range(numBin)(s is same as m = 1,...,M in the notes)
     # rate: numNeuro*numBin
@@ -455,7 +468,8 @@ cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] 
     for i in range(numBin):
         qexp_s += weight[i]*exp(rexp[i])
         
-    qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    # old version for probability: qexp_s = weight[s]*exp(rexp[s])/qexp_s
+    qexp_s = exp(rexp[s])/qexp_s if qexp_s else 0
     #     qexp_s = 0
     #     for i in range(numBin):
     #         qexp_s += weight[i]*exp(rexp[i] - mymax)
@@ -466,14 +480,16 @@ cdef double compute_prob_s_arimoto(int s, int numBin, int numNeuro, double[:,:] 
     
     return mean_s
 
-def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
-                    double[:] conv, double tau, int numIter, int my_num_threads = 4):
+def mc_coeff_arimoto(double[:] coeff, double[:,:] tuning, double[:] weight, double[:] slope,
+                     double[:] conv, double tau, int numIter, int my_num_threads = 4):
     '''Compute arimoto update for one iteration.'''
     # conv is old stim...
     # weight_new: computed new weights(probability)
     # tuing: numNeuro*numBin
     # weight: numBin, sum up to one
+    # slope: numNeuro, positive
     # conv: numBin, weighted sum is one.
+    # coeff: numBin
     
     cdef int numNeuro = tuning.shape[0]
     cdef int numBin = tuning.shape[1]
@@ -482,7 +498,7 @@ def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
     cdef Py_ssize_t i,j,l,k,m,p,s
     cdef Py_ssize_t n_iter
     
-    cdef double[:,:] weight_new_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     cdef double[:,:] rexp_all = np.zeros((my_num_threads, numBin), dtype = np.float)
     
     cdef double this_mean_s = 0
@@ -510,27 +526,282 @@ def mc_prob_arimoto(double[:] weight_new, double[:,:] tuning, double[:] weight,\
         for n_iter in prange(numIter):
             for s in range(numBin):
                 # samples conditioning on s: poisson_samples[n_iter,:,s]
-                this_mean_s = compute_prob_s_arimoto(s,numBin,numNeuro, rate, weight,\
+                this_mean_s = compute_coeff_s_arimoto(s,numBin,numNeuro, rate, weight,\
                                                      poisson_samples[n_iter,:,s], rexp_all[tid, :])
                 
-                weight_new_all[tid, s] += this_mean_s
+                coeff_all[tid, s] += this_mean_s
                 
-    
-        
-    cdef double prob_sum = 0
     for m in range(numBin): 
-        weight_new[m] = 0
+        coeff[m] = 0
         for tid in range(my_num_threads):
-            weight_new[m] += weight_new_all[tid, m]
-        weight_new[m] /= numIter
-        weight_new[m] = exp(weight_new[m])
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] /= numIter
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
+
+#---------------------------------------
+#---------- Gaussian Model -------------
+#---------------------------------------
+
+# ----------Compute info and grad by Monte Carlo--------
+# int[:] count->double[：]　response
+# add double[:,:] inv_cov_mat
+cdef double compute_mean_grad_s_gaussian(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,
+                                         double[:,:] inv_cov_mat,
+                                         double[:] response,
+                                         double[:,:,:] tmp_grad, double[:] quad) nogil: 
+    # for a fixed s in range(numBin)(s is same as m in the notes)
+    # rate: numNeuro*numBin
+    # weight: numBin (sum up to 1)
+    # inv_cov_mat: numNeuro*numNeuro
+    # response: numNeuro (specific to s, gaussian distribution conditioning on s)
+    
+    # tmp_grad: numBin*numNeuro*numBin, (will reuse in grad, so store for each s)
+    # quad: numBin,  (specific to s)
+       
+
+    cdef int i,j,k,l, p #, indj, indk
+    cdef double mean_s, tmp_sum, diff     #mymax
+
+    for l in range(numBin):
+        quad[l] = 0
+        for i in range(numNeuro):
+            for j in range(numNeuro):
+                quad[l] += (response[i] - rate[i, l])*inv_cov_mat[i,j]*(response[j] - rate[j,l])
         
-    for m in range(numBin):
-        prob_sum += weight_new[m] 
-#         print weight_new[m]
-#     print prob_sum
+    mean_s = 0
+    for l in range(numBin):
+        mean_s += weight[l] * exp(-0.5*(quad[l] - quad[s]))
+    mean_s = log(mean_s)
+    
+    for p in range(numNeuro):
+        for l in range(numBin):
+            diff = 0
+            for k in range(numNeuro):
+                diff += inv_cov_mat[p,k]*(response[k] - rate[k,l])
+            tmp_sum = 0
+            for j in range(numBin):
+                tmp_sum += weight[j]*exp(-0.5*(quad[j] - quad[l]))
+            
+            tmp_grad[s, p, l] += diff*weight[l]/tmp_sum
+        
+    return mean_s
+
+#@cython.boundscheck(False)
+#@cython.cdivision(True)
+cdef void update_grad_s_gaussian(int s, double[:,:] grad, int numBin, int numNeuro, 
+                                 double[:,:] rate, double[:] weight, double[:,:] inv_cov_mat, 
+                                 double[:] response, double mean_s) nogil:
+    # s is now i in the notes..
+    # count is sampled conditioning on s
+    # derivative of the probability density term
+    cdef int p
+    cdef double diff_p_s
+    for p in range(numNeuro):
+        diff_p_s = 0
+        for k in range(numNeuro):
+            diff_p_s += inv_cov_mat[p,k]*(response[k] - rate[k,s]) 
+        
+        grad[p, s] += weight[s]*diff_p_s*mean_s
+
+            
+
+# compute I and grad(I).
+def mc_mean_grad_gaussian(double[:,:] MI_grad, double[:,:] tuning, double[:] weight,
+                          double[:,:] inv_cov_mat,
+                          double[:] conv, double tau, int numIter, int my_num_threads = 4):
+    # conv is old stim...
+    # tuing: numNeuro*numBin
+    # MI_grad: numNeuro*numBin
+    # weight: numBin, sum up to one
+    # inv_cov_mat: inverse covariance matrix, numNeuro-by-numNeuro
+    # conv: numBin, weighted sum is one.
+    # 
+    cdef int numNeuro = tuning.shape[0] # or cdef int numNeuro
+    cdef int numBin = tuning.shape[1] # or cdef int numBin
+   
+    cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef Py_ssize_t i,j,l,k,m,p,s
+    cdef Py_ssize_t n_iter
+
+    cdef double[:,:] grad = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef double[:,:,:] grad_all = np.zeros((my_num_threads, numNeuro, numBin), dtype = np.float) 
+    
+    cdef double[:,:] quad_all = np.zeros((my_num_threads, numBin), dtype = np.float)   
+     
+    # cdef double[:,:,:] tmp_grad = np.zeros((numBin, numNeuro,numBin),dtype = np.float)
+    cdef double[:,:,:,:] tmp_grad_all = np.zeros((my_num_threads, numBin, numNeuro,numBin),dtype = np.float)
+
+
+    cdef double mean = 0 
+    cdef double this_mean_s = 0  
+    
+    for p in range(numNeuro):
+        for j in range(numBin):
+            for l in range(numBin):
+                rate[p,j] += tuning[p, (numBin+j-l) % numBin]*conv[l]
+            rate[p,j] *= tau
+            
+    # generate Gaussian samples for all s = 1,...,numBin(different s, different samples)
+    #     np.random.seed(305)
+    
+    cov_mat = np.linalg.inv(inv_cov_mat)
+    
+    gaussian_samples_np = np.zeros((numIter, numNeuro,numBin), dtype = np.float)
+    for s in range(numBin):
+        gaussian_samples_np[:,:,s] = np.random.multivariate_normal(rate[:,s], cov_mat, size = numIter)
+                
+    cdef double[:,:,:] gaussian_samples = gaussian_samples_np
+        
+    cdef int tid
+
+    with nogil, parallel(num_threads = my_num_threads):
+        tid = threadid()
+        for n_iter in prange(numIter):
+            for s in range(numBin):
+                # samples conditioning on s: gaussian_samples[n_iter,:,s]
+                # tmp_grad_all[tid, s,:,:] is updated
+                
+                
+                this_mean_s = compute_mean_grad_s_gaussian(
+                    s, numBin, numNeuro, rate, weight, inv_cov_mat,
+                    gaussian_samples[n_iter,:,s], tmp_grad_all[tid,:,:,:], quad_all[tid,:])
+                
+                # compute negative mean entropy
+                mean += weight[s]*this_mean_s
+
+                update_grad_s_gaussian(s, grad_all[tid,:,:], numBin, numNeuro, rate, weight,
+                                       inv_cov_mat, gaussian_samples[n_iter,:,s], this_mean_s)
+
+    mean /= numIter
+    mean *= (-1) # mutual information
+    
+    # compute the rate gradient
+    
+    cdef double tmp_grad_term = 0
+    for p in range(numNeuro):
+        for s in range(numBin):
+            # the 2nd term
+            for m in range(numBin): 
+                tmp_grad_term = 0
+                for k in range(my_num_threads):
+                    tmp_grad_term += tmp_grad_all[k, m,p, s]#tmp_grad[m, p,s] += tmp_grad_all[k, m,p, s]
+                    # tmp_grad[m,p,s] is sampled conditioning on m
+                grad[p,s] += weight[m]*tmp_grad_term #weight[m]*tmp_grad[m,p, s]
+            # the first term
+            for k in range(my_num_threads):
+                grad[p,s] += grad_all[k,p,s] 
+            # devide by numIter
+            grad[p,s] /= numIter
+            grad[p,s] *= (-1)
+
+                        
+    # compute tuning gradient
+    for p in range(numNeuro):
+        for l in range(numBin):
+            MI_grad[p,l] = 0
+            for j in range(numBin):
+                MI_grad[p,l] += grad[p,j]*conv[(numBin+j-l) % numBin] 
+            MI_grad[p,l] *= tau
+
+    return mean#,mean_list_np,grad_all_np,poisson_samples_np,lrate_all_np, mexp_all_np,dexp_all_np
+
+
+
+# ----------Blahut-Arimoto Algorithm for Gaussian by Monte Carlo--------
+
+#@cython.boundscheck(False)
+#@cython.cdivision(True)
+cdef double compute_coeff_s_arimoto_gaussian(int s, int numBin, int numNeuro, 
+                                             double[:,:] rate, double[:] weight,
+                                             double[:,:] inv_cov_mat, 
+                                             double[:] response, double[:] quad) nogil: 
+    # for a fixed s in range(numBin)(s is same as m = 1,...,M in the notes)
+    # rate: numNeuro*numBin
+    # weight: numBin (sum up to 1)
+    # count: numNeuro (specific to s, Poisson distribution conditioning on s)    
+    
+    # quad: numBin
+    
+    cdef int i, j, l, p #, indj, indk
+    cdef double exp_sum
+    
+    for l in range(numBin):
+        quad[l] = 0
+        for i in range(numNeuro):
+            for j in range(numNeuro):
+                quad[l] += (response[i] - rate[i, l])*inv_cov_mat[i,j]*(response[j] - rate[j,l])
+                
+    exp_sum = 0
+    for l in range(numBin):
+        exp_sum += weight[l]*exp(-0.5*(quad[l]- quad[s]))
+    
+  
+    return -log(exp_sum)
+    
+
+def mc_coeff_arimoto_gaussian(double[:] coeff, double[:,:] tuning, double[:] weight, 
+                              double[:,:] inv_cov_mat, double[:] slope,
+                              double[:] conv, double tau, int numIter, int my_num_threads = 4):
+    '''Compute arimoto coefficients (exp of DKL).'''
+    # coeff: numBin (store result)
+    # tuing: numNeuro*numBin
+    # weight: numBin, sum up to one
+    # inv_cov_mat: numNeuro-by-numNeuro positive definite matrix
+    # slope: numNeuro, >=0
+    # conv: numBin, weighted sum is one.
+   
+    
+    cdef int numNeuro = tuning.shape[0]
+    cdef int numBin = tuning.shape[1]
+   
+    cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef Py_ssize_t i,j,l,k,m,p,s
+    cdef Py_ssize_t n_iter
+    
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] quad_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    
+    cdef double this_mean_s = 0
+    
+    for p in range(numNeuro):
+        for j in range(numBin):
+            for l in range(numBin):
+                rate[p,j] += tuning[p, (numBin+j-l) % numBin]*conv[l]
+            rate[p,j] *= tau
+            
+    # generate Poission samples for all s = 1,...,numBin(different s, different samples)
+    #     np.random.seed(305)
+    cov_mat = np.linalg.inv(inv_cov_mat)
+    
+    gaussian_samples_np = np.zeros((numIter, numNeuro,numBin), dtype = np.float)
+    for s in range(numBin):
+        gaussian_samples_np[:,:,s] = np.random.multivariate_normal(rate[:,s], cov_mat, size = numIter)
+                
+    cdef double[:,:,:] gaussian_samples = gaussian_samples_np
+
+        
+    cdef int tid
+
+    with nogil, parallel(num_threads = my_num_threads):
+        tid = threadid()
+        for n_iter in prange(numIter):
+            for s in range(numBin):
+                # samples conditioning on s: gaussian_samples[n_iter,:,s]
+                this_mean_s = compute_coeff_s_arimoto_gaussian(
+                    s, numBin, numNeuro, rate, weight, inv_cov_mat,
+                    gaussian_samples[n_iter,:,s], quad_all[tid, :])
+                
+                coeff_all[tid, s] += this_mean_s
+                
     for m in range(numBin): 
-        weight_new[m] /= prob_sum
-    return 0
-
-
+        coeff[m] = 0
+        for tid in range(my_num_threads):
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] /= numIter
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
