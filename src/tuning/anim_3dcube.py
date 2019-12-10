@@ -79,7 +79,6 @@ def setup_cube3d_figure(num_pts,
             ax_w_bar = None
         if INCLUDE_WEIGHT:
             ax_w = fig.add_subplot(gs01[ax_w_idx])
-            #weight_max = np.max(np.array(weights_list))
             ax_w.set_ylim(0, weight_max + 0.05)
         else:
             ax_w = None
@@ -245,7 +244,6 @@ def cube3dplots(X, Y, Z, weight = None, info = None,
         raise Exception('Wrong dimension of inputs!')    
     if weight is None:
         PLOT_WEIGHTS = False
-        weight_max = 1.0
     elif len(weight)!= len(X):
         raise Exception('Wrong dimension of inputs: weight')
     elif np.fabs(np.sum(weight) - 1)>1e-5:
@@ -261,7 +259,7 @@ def cube3dplots(X, Y, Z, weight = None, info = None,
     if weight is not None:
         weight_max = np.max(np.array(weight)) # maximum weight
     else:
-        weight_max = None
+        weight_max = 1.0
     curr_radius = max(np.max(np.array([X,Y,Z])), radius) # radius
     
     # figure setup
@@ -330,7 +328,7 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
     if weights_list is not None:
         weight_max = np.max(np.array(weights_list)) # maximum weight
     else:
-        weight_max = None
+        weight_max = 1.0
     curr_radius = max(np.max(np.array([X_list,Y_list,Z_list])), radius) # radius
     
     # figure setup
