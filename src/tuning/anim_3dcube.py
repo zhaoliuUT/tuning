@@ -348,7 +348,6 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
         _ = plot_cube3d_data(
             cube_fig_setup, X_list[i], Y_list[i], Z_list[i], weight = weights_list[i], info = info_list[i],
             weight_tol = weight_tol, weight_format = weight_format,
-            FILE_NAME = "", ADD_TIME = False, # not saving image
         )  
         return cube_fig_setup
         #return cube_fig_setup
