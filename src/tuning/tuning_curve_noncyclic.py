@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib import animation
-from cyMINoncyclic import *
-from anim_3dcube import *
+from tuning.cyMINoncyclic import *
+from tuning.anim_3dcube import *
 
 class TuningCurve_Noncyclic:
     """TuningCurve Class (one or multi-population)
@@ -197,7 +197,7 @@ class TuningCurve_Noncyclic:
             
             for p in range(self.numNeuro):
                 ax_grad.plot(xx, yy_grad[p],lw = 1.5, color = color_list[p], \
-                             label = r'$(\nabla I)_{%d}$'%i)
+                             label = r'$(\nabla I)_{%d}$'%p)
             ax_grad.set_title('Gradient')
             ax_tuning.grid()
             ax_weight.grid()
