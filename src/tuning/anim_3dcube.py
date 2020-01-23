@@ -1,3 +1,4 @@
+## new version
 import time, sys, os, copy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,8 +11,10 @@ import matplotlib.gridspec as gridspec
 from matplotlib import animation
 
 def pc_fun_weights(f_vec, weights):
-    if weights.size != f_vec.size or np.fabs(np.sum(weights) - 1)>1e-5:
+    if weights.size != f_vec.size:
         raise Exception("Dimension mismatch!")
+#     if np.fabs(np.sum(weights) - 1)>1e-5:
+#         raise Exception("Weight sum not equal to one!")
     numBin = weights.size
     xtmp = np.cumsum(weights)
     xx = [ [xtmp[i]]*2 for i in range(0, numBin-1) ]  
@@ -32,21 +35,125 @@ class Arrow3D(FancyArrowPatch):
         self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
         FancyArrowPatch.draw(self, renderer)
 
-def setup_cube3d_figure(num_pts,
-                        radius = 1, weight_max = 1.0, weight_tol = 1e-3, 
-                        cmap_name = 'nipy_spectral', shuffle_colors = False,
-                        PLOT_WEIGHTS = True, INCLUDE_INFO = True,
+def draw_cube_in_axis(ax, radius, min_radius):
+    r = [min_radius, radius]
+    for s, e in combinations(np.array(list(product(r, r, r))), 2):
+        if np.sum(np.abs(s-e)) == r[1]-r[0]:
+            ax.plot3D(*zip(s, e), color="k", alpha = 0.5, lw = 1.5)#linestyle='--'
+
+    r2 = 1.4*radius
+    arrowendpts =  [[r2, min_radius, min_radius],
+                    [min_radius, min_radius, r2],
+                    [min_radius, r2, min_radius]]
+    for s in arrowendpts:
+        a = Arrow3D(*zip([min_radius,min_radius,min_radius], s), mutation_scale=20,
+                    lw=1, arrowstyle="-|>", color="k")
+        ax.add_artist(a)
+    ax._axis3don = False
+    ax.grid(True)
+    ax.set_xlim([min_radius,1.5*radius])
+    ax.set_ylim([min_radius,1.5*radius])
+    ax.set_zlim([min_radius,1.5*radius])
+
+    endpts = [[1.45*radius,-0.1*radius+min_radius,min_radius],
+              [-0.1*radius+min_radius,1.45*radius,min_radius],
+              [min_radius,min_radius,1.45*radius]]
+    for k in range(len(endpts)):
+        ax.text(endpts[k][0],endpts[k][1],endpts[k][2],r'$f_%d$'%(k+1),color = 'k',fontsize = 16)
+    ax.view_init(azim = 30)
+
+def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
+                             weight_txt_list=[], radius = 1,
+                             weight_tol = 1e-3, weight_format = '%.2f',
+                             color_arr = None,
+                             cmap_name = 'nipy_spectral', shuffle_colors = False,
+                             point_size = 100,
+                            ):
+
+    '''Set data in cube axis, including the scatter points, and weights' texts.'''
+
+    num_pts = len(X)
+
+    # set scatter points' data
+    scat._offsets3d = juggle_axes(X, Y, Z, 'z')
+
+    # set scatter points' colors, alpha, sizes
+    if color_arr is None:
+            #color_arr = np.arange(num_pts)
+        cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
+        color_arr = np.array([cmap(i) for i in range(num_pts)])
+    if shuffle_colors:
+        np.random.shuffle(color_arr)
+    if color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array!")
+
+    scat._facecolor3d = color_arr
+    #scat.set_facecolor(color_arr) #python bug: this only works for 2d
+    scat.set_edgecolor('k')
+    scat.set_alpha(1.0)
+    sizes = np.ones(num_pts)*point_size
+    if weight is not None:
+        sizes[np.fabs(weight) < weight_tol] = 0
+    scat.set_sizes(sizes)
+
+
+    # set weight texts of the scatter points
+    txt_list = weight_txt_list
+    #radius = cube_fig_setup['radius']
+    #ax_cube = cube_fig_setup['ax_cube']
+    if len(txt_list) < num_pts:
+        # add empty texts
+        txt_list += [ax.text2D(0,0,"",fontsize = 14, color = 'k')
+                     for _ in range(num_pts - len(txt_list))] # 'steelblue'
+
+    if weight is not None:
+        for txt, new_x, new_y, new_z, w in zip(txt_list[:num_pts], X, Y, Z, weight):
+            # animating Text in 3D proved to be tricky. Tip of the hat to @ImportanceOfBeingErnest
+            # for this answer https://stackoverflow.com/a/51579878/1356000
+            if np.fabs(w) > weight_tol:
+                x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
+                                                  ax.get_proj())
+                txt.set_position((x_,y_))
+                txt.set_text(weight_format%w)
+            else:
+                txt.set_text("")
+
+    return txt_list
+
+def plot_path_in_axis(ax, X, Y, Z, path_vec,
+                      path_close=True, path_color='crimson', linestyle='dashed',
+                     ):
+    '''connect the path of points in cube axis:
+    the path is a vector of integers, each in [0,num_pts-1], specifying the order.
+    '''
+
+    num_pts = len(X)
+    if np.any(path_vec >= num_pts):
+        raise Exception('Wrong input of the path vector!')
+
+    # connect the points by path in the order of path_vec
+    for i in range(len(path_vec) - 1):
+        ax.plot3D([X[path_vec[i]], X[path_vec[i+1]]],
+                  [Y[path_vec[i]], Y[path_vec[i+1]]],
+                  [Z[path_vec[i]], Z[path_vec[i+1]]],
+                  color=path_color, linestyle=linestyle,
+                  lw = 1.5, alpha=0.7)
+    if path_close:
+        ax.plot3D([X[path_vec[-1]], X[path_vec[0]]],
+                  [Y[path_vec[-1]], Y[path_vec[0]]],
+                  [Z[path_vec[-1]], Z[path_vec[0]]],
+                  color=path_color,linestyle=linestyle,
+                  lw = 1.5, alpha=0.7)
+
+def setup_cube3d_figure(radius = 1, min_radius = 0,
+                        INCLUDE_INFO = True,
                         INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
                        ):
     
     '''When numNeuro = 3, plot points in a cube.'''
     ''' the 'radius' argument acts the same way as maxium FP.'''
     
-    X0 = np.zeros(num_pts)
-    Y0 = np.zeros(num_pts)
-    Z0 = np.zeros(num_pts)
-    W0 = 1.0*np.ones(num_pts)/num_pts
-    
+
     # figure setup
     if INCLUDE_FUN or INCLUDE_WEIGHT or INCLUDE_WEIGHT_BAR:
         fig = plt.figure(figsize = (12, 6 + 1.0*INCLUDE_WEIGHT_BAR))
@@ -79,7 +186,8 @@ def setup_cube3d_figure(num_pts,
             ax_w_bar = None
         if INCLUDE_WEIGHT:
             ax_w = fig.add_subplot(gs01[ax_w_idx])
-            ax_w.set_ylim(0, weight_max + 0.05)
+            #weight_max = np.max(np.array(weights_list))
+            #ax_w.set_ylim(0, weight_max + 0.05)
         else:
             ax_w = None
     else:
@@ -91,45 +199,20 @@ def setup_cube3d_figure(num_pts,
         ax_w = None
 
     # draw cube
-    r = [0, radius]
-    for s, e in combinations(np.array(list(product(r, r, r))), 2):
-        if np.sum(np.abs(s-e)) == r[1]-r[0]:
-            ax_cube.plot3D(*zip(s, e), color="k", alpha = 0.5, lw = 1.5)#linestyle='--'
-
-    r2 = [0, 1.4*radius]
-    for s in np.array(list(product(r2, r2, r2))):
-        if np.sum(s> 0) == 1:
-            a = Arrow3D(*zip([0,0,0], s), mutation_scale=20,
-                lw=1, arrowstyle="-|>", color="k")
-            ax_cube.add_artist(a)
-    ax_cube._axis3don = False
-    ax_cube.grid(True)
-    ax_cube.set_xlim([0,1.5*radius])
-    ax_cube.set_ylim([0,1.5*radius])
-    ax_cube.set_zlim([0,1.5*radius])
-    endpts = [[1.45*radius,-0.1*radius,0],[0.1*radius,1.45*radius,0],[0,0,1.45*radius]]
+    draw_cube_in_axis(ax_cube, radius, min_radius)
     
+    # plot scatter points
+    scat = ax_cube.scatter([radius], [radius], [radius], s= 0)#, edgecolor='k', alpha=1)
     
-    for k in range(len(endpts)):
-        ax_cube.text(endpts[k][0],endpts[k][1],endpts[k][2],r'$f_%d$'%(k+1),color = 'k',fontsize = 16)
-
-    ax_cube.view_init(azim = 30)
-
-    # color_arr = np.arange(num_pts)
-    cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
-    color_arr = np.array([cmap(i) for i in range(num_pts)])
-    if shuffle_colors:
-        np.random.shuffle(color_arr)
-    
-    scat = ax_cube.scatter(X0, Y0, Z0,  c = color_arr,s= 100, edgecolor='k', alpha=1)
+    # plot info txt
     if INCLUDE_INFO:
         x0, y0, _ = proj3d.proj_transform(0,-0.3*radius, -1.5*radius,ax_cube.get_proj())
         info_txt = ax_cube.text2D(x0,y0,"", fontsize = 15)
     else:
         info_txt = None
-    
-    
-    txt_list = [ax_cube.text2D(0,0,"",fontsize = 14, color = 'k') for _ in range(num_pts)]  # 'steelblue'
+
+    # plot weight txt list
+    weight_txt_list = []#[ax_cube.text2D(0,0,"",fontsize = 14, color = 'k') for _ in range(18)]  # 'steelblue'
     if INCLUDE_FUN:
         line1, = ax_f1.plot([], [], color = 'crimson', lw = 2)
         line2, = ax_f2.plot([], [], color = 'seagreen', lw = 2)
@@ -152,56 +235,51 @@ def setup_cube3d_figure(num_pts,
     else:
         lines_list = None
         
-    if INCLUDE_WEIGHT:
-        barcollection = ax_w.bar(np.arange(num_pts), W0, color = color_arr)
-    else:
-        barcollection = None
-    if INCLUDE_WEIGHT_BAR:
-        rect_list = []
-        for j in range(num_pts):
-            rect = plt.Rectangle((np.sum(W0[:j]), -0.1), W0[j], 0.2,
-                                 facecolor=color_arr[j])
-            ax_w_bar.add_artist(rect)
-            rect_list.append(rect)
-    else:
-        rect_list = None
-        
     cube_fig_setup = {'fig':fig, 'ax_cube':ax_cube,
-                     'ax_f_list':ax_f_list, 'ax_w':ax_w, 'ax_w_bar':ax_w_bar,
-                     'scat': scat, 'lines_list':lines_list, 'barcollection':barcollection, 'rect_list':rect_list,
-                     'info_txt':info_txt, 'weight_txt_list':txt_list,
-                     'color_arr':color_arr, 'radius':radius,
+                      'ax_f_list':ax_f_list, 'ax_w':ax_w, 'ax_w_bar':ax_w_bar,
+                      'scat': scat, 'lines_list':lines_list,
+                      'info_txt':info_txt,
+                      'weight_txt_list':weight_txt_list,
+                      'radius':radius, 'min_radius':min_radius,
                      }
     return cube_fig_setup
 
-def plot_cube3d_data(cube_fig_setup, X, Y, Z, weight = None, info = None,
-                     weight_tol = 1e-3, weight_format = '%.2f',
-                    ): 
-    '''Set data in cube_fig_setup'''
+def set_data_in_figure(cube_fig_setup, X, Y, Z, weight = None, info = None,
+                       weight_tol = 1e-3, weight_format = '%.2f',
+                       color_arr = None, cmap_name = 'nipy_spectral', shuffle_colors = False,
+                       point_size = 100,
+                       weight_max = 1.0,
+                       info_format = 'MI = %.4f',
+                      ):
+    '''Set data in cube_fig_setup (all axis)'''
     
     num_pts = len(X)
-    # plot points and label weights
-    cube_fig_setup['scat']._offsets3d = juggle_axes(X, Y, Z, 'z')    
-    sizes = np.ones(num_pts)*100
-    if weight is not None:
-        sizes[weight < weight_tol] = 0
-    cube_fig_setup['scat'].set_sizes(sizes)
     
-    txt_list = cube_fig_setup['weight_txt_list']
-    radius = cube_fig_setup['radius']
+    # generate color array if color_arr is None
+    if color_arr is None:
+            #color_arr = np.arange(num_pts)
+        cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
+        color_arr = np.array([cmap(i) for i in range(num_pts)])
+    if shuffle_colors:
+        np.random.shuffle(color_arr)
+    if color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array!")
+
+    # set data in the cube axis
     ax_cube = cube_fig_setup['ax_cube']
-    if weight is not None:
-        for txt, new_x, new_y, new_z, w in zip(txt_list, X, Y, Z, weight):
-            # animating Text in 3D proved to be tricky. Tip of the hat to @ImportanceOfBeingErnest
-            # for this answer https://stackoverflow.com/a/51579878/1356000
-            if w > weight_tol:
-                x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
-                                                  ax_cube.get_proj())
-                txt.set_position((x_,y_))
-                txt.set_text(weight_format%w)
-            else:
-                txt.set_text("")
+    scat = cube_fig_setup['scat']
+    weight_txt_list = cube_fig_setup['weight_txt_list']
+    radius = cube_fig_setup['radius']
+
+    weight_txt_list = set_scatter_data_in_axis(
+        ax_cube, scat, X, Y, Z, weight=weight,
+        weight_txt_list=weight_txt_list, radius=radius,
+        weight_tol=weight_tol, weight_format=weight_format,
+        color_arr=color_arr, cmap_name=cmap_name, shuffle_colors=shuffle_colors,point_size=point_size,
+    )
+    cube_fig_setup['weight_txt_list'] = weight_txt_list
                 
+    # set lines' data
     if cube_fig_setup['lines_list'] is not None:
         line1, line2, line3 = cube_fig_setup['lines_list']
         if weight is not None:
@@ -217,23 +295,44 @@ def plot_cube3d_data(cube_fig_setup, X, Y, Z, weight = None, info = None,
             line2.set_data(1.0*np.arange(num_pts)/num_pts, Y)
             line3.set_data(1.0*np.arange(num_pts)/num_pts, Z)
             
+    # set weight histogram' data
+    ax_w = cube_fig_setup['ax_w']
+    if ax_w is not None:
+        ax_w.clear()
+        barcollection = ax_w.bar(np.arange(num_pts), weight, color = color_arr)
+        # set axis limit
+        ax_w.set_ylim(0, weight_max)
 
-    if cube_fig_setup['barcollection'] is not None:
-        for j, b in enumerate(cube_fig_setup['barcollection']):
-            b.set_height(weight[j])
-    if cube_fig_setup['rect_list'] is not None:
+    # set weight bar's data
+    ax_w_bar = cube_fig_setup['ax_w_bar']
+    if ax_w_bar is not None:
+        #rect_list = []
+        ax_w_bar.clear()
+        ax_w_bar.set_xlim([0, 1])
+        ax_w_bar.set_ylim([-0.1, 0.1])
+        ax_w_bar.set_aspect(0.2)
+        ax_w_bar.set_yticks([])
         for j in range(num_pts):
-            cube_fig_setup['rect_list'][j].set_x(np.sum(weight[:j]))
-            cube_fig_setup['rect_list'][j].set_width(weight[j])
+            rect = plt.Rectangle((np.sum(weight[:j]), -0.1), weight[j], 0.2,
+                                 facecolor=color_arr[j])
+            ax_w_bar.add_artist(rect)
+            #rect_list.append(rect)
 
+    # set info data
     if (cube_fig_setup['info_txt'] is not None) and (info is not None):
-        cube_fig_setup['info_txt'].set_text("MI = %.4f"%info)
+        cube_fig_setup['info_txt'].set_text(info_format%info)
 
     return cube_fig_setup
 
-def cube3dplots(X, Y, Z, weight = None, info = None, 
-                radius = 1, weight_tol = 1e-3, weight_format = '%.2f',
-                cmap_name = 'nipy_spectral', shuffle_colors = False,
+
+def cube3dplots(X, Y, Z, weight = None, info = None,
+                radius = 1, min_radius = 0,
+                weight_tol = 1e-3, weight_format = '%.2f',
+                weight_max = None, info_format = 'MI = %.4f',
+                color_arr = None, cmap_name = 'nipy_spectral', shuffle_colors = False,
+                point_size = 100,
+                path_vec = None, path_close = True,
+                path_color='crimson', linestyle='dashed',
                 INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
                 FILE_NAME = "", ADD_TIME = True):
     '''Plot a single cube figure.'''
@@ -242,40 +341,55 @@ def cube3dplots(X, Y, Z, weight = None, info = None,
     
     if len(X)!=len(Y) or len(Y)!=len(Z):
         raise Exception('Wrong dimension of inputs!')    
-    if weight is None:
-        PLOT_WEIGHTS = False
-    elif len(weight)!= len(X):
+    if weight is not None and len(weight)!= len(X):
         raise Exception('Wrong dimension of inputs: weight')
-    elif np.fabs(np.sum(weight) - 1)>1e-5:
-        raise Exception('Wrong input of weight: sum error!')
-    else:
-        PLOT_WEIGHTS = True        
+#     elif np.fabs(np.sum(weight) - 1)>1e-5:
+#         raise Exception('Wrong input of weight: sum error!')
+
     if info is None:
         INCLUDE_INFO = False
     else:
         INCLUDE_INFO = True
         
     num_pts = len(X) # number of points
-    if weight is not None:
-        weight_max = np.max(np.array(weight)) # maximum weight
+    if weight_max is not None:
+        curr_weight_max = weight_max
+    elif weight is not None:
+        curr_weight_max = np.max(np.array(weight)) # maximum weight
     else:
-        weight_max = 1.0
+        curr_weight_max = 1.0
+
     curr_radius = max(np.max(np.array([X,Y,Z])), radius) # radius
+    curr_min_radius = min(np.min(np.array([X,Y,Z])), min_radius) # min_radius
     
     # figure setup
     
     cube_fig_setup =  setup_cube3d_figure(
-        num_pts, radius = curr_radius, weight_max = weight_max, weight_tol = weight_tol, 
-        cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-        PLOT_WEIGHTS = PLOT_WEIGHTS, INCLUDE_INFO = INCLUDE_INFO,
+        radius = curr_radius, min_radius = curr_min_radius,
+        #weight_max = weight_max, #weight_tol = weight_tol,
+        #cmap_name = cmap_name, shuffle_colors = shuffle_colors,
+        INCLUDE_INFO = INCLUDE_INFO,
         INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
     )
     
     # set data
+    cube_fig_setup = set_data_in_figure(
+        cube_fig_setup, X, Y, Z, weight = weight, info = info,
+        weight_tol = weight_tol, weight_format = weight_format,
+        weight_max = curr_weight_max, info_format = info_format,
+        color_arr = color_arr,
+        cmap_name = cmap_name, shuffle_colors = shuffle_colors,
+        point_size = point_size,
+    )
+
+    # plot path
     
-    cube_fig_setup = plot_cube3d_data(cube_fig_setup, X, Y, Z, weight = weight, info = info,
-                                      weight_tol = weight_tol, weight_format = weight_format,
-                                     )
+    if path_vec is not None:
+        plot_path_in_axis(
+            cube_fig_setup['ax_cube'], X, Y, Z,
+            path_vec, path_close=path_close,
+            path_color=path_color, linestyle=linestyle,
+        )
     
     # save figure
     
@@ -294,8 +408,12 @@ def cube3dplots(X, Y, Z, weight = None, info = None,
     return cube_fig_setup
 
 def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, 
-                radius = 1, weight_tol = 1e-3, weight_format = '%.2f',
+                radius = 1, min_radius = 0,
+                weight_tol = 1e-3, weight_format = '%.2f',
+                weight_max = None, info_format = 'MI = %.4f',
+                color_arr_list = None,
                 cmap_name = 'nipy_spectral', shuffle_colors = False,
+                point_size = 100,
                 INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
                 FILE_NAME = "", ADD_TIME = True, interval = 1000):
     
@@ -309,46 +427,70 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
     elif len(X_list[0])!=len(Y_list[0]) or len(Y_list[0])!=len(Z_list[0]):
         raise Exception('Wrong dimension of inputs!')   
     
-    if weights_list is None:
-        PLOT_WEIGHTS = False
-    elif len(weights_list) != len(X_list) or len(weights_list[0])!= len(X_list[0]):
-        raise Exception('Wrong dimension of inputs: weight_list')
-    elif np.fabs(np.sum(weights_list[0]) - 1)>1e-5:
-        raise Exception('Wrong input of weights: sum error!')
-    else:
-        PLOT_WEIGHTS = True
+    if weights_list is not None:
+        if len(weights_list) != len(X_list) or len(weights_list[0])!= len(X_list[0]):
+            raise Exception('Wrong dimension of inputs: weight_list')
+        elif np.fabs(np.sum(weights_list[0]) - 1)>1e-5:
+            raise Exception('Wrong input of weights: sum error!')
+
     if info_list is None:
         INCLUDE_INFO = False
     else:
         INCLUDE_INFO = True
     
     
-    num_pts = len(X_list[0]) # number of points
+    num_pts = len(X_list[0])#np.max([len(X) for X in X_list]) # number of points
+
     num_frames = len(X_list) # number of frames
-    if weights_list is not None:
-        weight_max = np.max(np.array(weights_list)) # maximum weight
+    if weight_max is not None:
+        curr_weight_max = weight_max
+    elif weight is not None:
+        curr_weight_max = np.max([np.max(w) for w in weights_list]) # maximum weight
     else:
-        weight_max = 1.0
-    curr_radius = max(np.max(np.array([X_list,Y_list,Z_list])), radius) # radius
-    
+        curr_weight_max = 1.0
+
+    x_max = np.max([np.max(X_list[i]) for i in range(num_frames)])
+    y_max = np.max([np.max(Y_list[i]) for i in range(num_frames)])
+    z_max = np.max([np.max(Z_list[i]) for i in range(num_frames)])
+    x_min = np.min([np.min(X_list[i]) for i in range(num_frames)])
+    y_min = np.min([np.min(Y_list[i]) for i in range(num_frames)])
+    z_min = np.min([np.min(Z_list[i]) for i in range(num_frames)])
+    curr_radius = max(x_max, y_max, z_max, radius)#max(np.max(np.array([X_list,Y_list,Z_list])), radius) # radius
+    curr_min_radius = min(x_min, y_min, z_min, min_radius)#min(np.min(np.array([X_list,Y_list,Z_list])), min_radius) # min_radius
     # figure setup
     
     cube_fig_setup =  setup_cube3d_figure(
-        num_pts, radius = curr_radius, weight_max = weight_max, weight_tol = weight_tol, 
-        cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-        PLOT_WEIGHTS = PLOT_WEIGHTS, INCLUDE_INFO = INCLUDE_INFO,
+        radius = curr_radius, min_radius = curr_min_radius,
+        #weight_max = weight_max, #weight_tol = weight_tol,
+        #cmap_name = cmap_name, shuffle_colors = shuffle_colors,
+        INCLUDE_INFO = INCLUDE_INFO,
         INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
     )
 
     # animation function.  This is called sequentially
     
     def animate(i):
-        _ = plot_cube3d_data(
-            cube_fig_setup, X_list[i], Y_list[i], Z_list[i], weight = weights_list[i], info = info_list[i],
+        if weights_list is not None:
+            curr_weight = weights_list[i]
+        else:
+            curr_weight = None
+        if info_list is not None:
+            curr_info = info_list[i]
+        else:
+            curr_info = None
+        if color_arr_list is not None:
+            curr_color_arr = color_arr_list[i]
+        else:
+            curr_color_arr = None
+        _ = set_data_in_figure(
+            cube_fig_setup, X_list[i], Y_list[i], Z_list[i], weight = curr_weight, info = curr_info,
             weight_tol = weight_tol, weight_format = weight_format,
-        )  
+            weight_max = curr_weight_max, info_format = info_format,
+            color_arr = curr_color_arr,
+            cmap_name = cmap_name, shuffle_colors = shuffle_colors,
+            point_size = point_size,
+        )
         return cube_fig_setup
-        #return cube_fig_setup
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     fig = cube_fig_setup['fig']
@@ -370,3 +512,60 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
             os.makedirs(directory)
     anim.save(filename, writer="ffmpeg")
     return anim
+
+
+# plot cube in axis
+def cube3dplots_in_axis(
+    ax_cube, X, Y, Z, weight = None, info = None, 
+    radius = 1, min_radius = 0,
+    weight_tol = 1e-3, weight_format = '%.2f',
+    info_format = 'MI = %.4f',
+    color_arr = None, cmap_name = 'nipy_spectral', shuffle_colors = False,
+    point_size = 100,
+    path_vec = None, path_close = True,
+    path_color='crimson', linestyle='dashed'):
+
+    '''Plot cube and points data in a given matplotlib axis.'''
+
+    # check inputs
+
+    if len(X)!=len(Y) or len(Y)!=len(Z):
+        raise Exception('Wrong dimension of inputs!')
+    if weight is not None and len(weight)!= len(X):
+        raise Exception('Wrong dimension of inputs: weight')
+
+    num_pts = len(X) # number of points
+
+    curr_radius = max(np.max(np.array([X,Y,Z])), radius) # radius
+    curr_min_radius = min(np.min(np.array([X,Y,Z])), min_radius) # min_radius
+
+    # draw cube
+
+    draw_cube_in_axis(ax_cube, curr_radius, curr_min_radius)
+
+    # plot points and weights in cube
+
+    scat = ax_cube.scatter([radius], [radius], [radius], s= 0)#, edgecolor='k', alpha=1)
+
+    weight_txt_list = set_scatter_data_in_axis(
+        ax_cube, scat, X, Y, Z, weight=weight,
+        weight_txt_list=[], radius=curr_radius,
+        weight_tol=weight_tol, weight_format=weight_format,
+        color_arr=color_arr, cmap_name=cmap_name, shuffle_colors=shuffle_colors,point_size=point_size,
+    )
+
+    # set info text
+
+    if info is not None:
+        x0, y0, _ = proj3d.proj_transform(0,-0.3*curr_radius, -1.5*curr_radius, ax_cube.get_proj())
+        info_txt = ax_cube.text2D(x0,y0,"", fontsize = 15)
+        info_txt.set_text(info_format%info)
+
+    # plot path
+
+    if path_vec is not None:
+        plot_path_in_axis(
+            ax_cube, X, Y, Z,
+            path_vec, path_close=path_close,
+            path_color=path_color, linestyle=linestyle,
+        )
