@@ -63,7 +63,7 @@ def draw_cube_in_axis(ax, radius, min_radius):
     ax.view_init(azim = 30)
 
 def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
-                             weight_txt_list=[], radius = 1,
+                             weight_txt_list=None, radius = 1,
                              weight_tol = 1e-3, weight_format = '%.2f',
                              color_arr = None,
                              cmap_name = 'nipy_spectral', shuffle_colors = False,
@@ -98,7 +98,11 @@ def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
 
 
     # set weight texts of the scatter points
-    txt_list = weight_txt_list
+    if weight_txt_list is None:
+        txt_list = []
+    else:
+        txt_list = weight_txt_list
+
     #radius = cube_fig_setup['radius']
     #ax_cube = cube_fig_setup['ax_cube']
     if len(txt_list) < num_pts:
@@ -549,7 +553,7 @@ def cube3dplots_in_axis(
 
     weight_txt_list = set_scatter_data_in_axis(
         ax_cube, scat, X, Y, Z, weight=weight,
-        weight_txt_list=[], radius=curr_radius,
+        weight_txt_list=None, radius=curr_radius,
         weight_tol=weight_tol, weight_format=weight_format,
         color_arr=color_arr, cmap_name=cmap_name, shuffle_colors=shuffle_colors,point_size=point_size,
     )
