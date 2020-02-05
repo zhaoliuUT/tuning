@@ -7,7 +7,7 @@ from scipy import optimize
 from matplotlib import animation
 import matplotlib.pyplot as plt
 from cyMIBN import *
-from tuning_curve_bn import *
+from tuning.tuning_curve_bn import *
 
 
 class TuningCurveOptimizer_BN:

@@ -6,8 +6,8 @@ from scipy import optimize
 
 from matplotlib import animation
 import matplotlib.pyplot as plt
-from cyMIPoisson import *
-from tuning_curve import *
+from tuning.cyMIPoisson import *
+from tuning.tuning_curve import *
 
 class TuningCurveOptimizer:
     """TuningCurveOptimizer Class (1 or 2 populations)

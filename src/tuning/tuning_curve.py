@@ -2,7 +2,7 @@ import time, sys, os, copy
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
-from cyMIPoisson import *
+from tuning.cyMIPoisson import *
 
 class TuningCurve:
     """TuningCurve Class (one or multi-population)

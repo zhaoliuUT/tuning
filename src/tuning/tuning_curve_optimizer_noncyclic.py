@@ -7,7 +7,7 @@ from functools import partial
 
 from cyMINoncyclic import *
 from anim_3dcube import *
-from tuning_curve_noncyclic import *
+from tuning.tuning_curve_noncyclic import *
 
 class TuningCurveOptimizer_Noncyclic:
     """TuningCurveOptimizer_Noncyclic Class
