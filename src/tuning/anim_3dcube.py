@@ -347,7 +347,105 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
         ## set color and linestyle
         path_line.set_color(path_color)
         path_line.set_linestyle(linestyle)
+    return
 
+def set_func_data_in_axis_list(ax_list, points_data, weights=None, path_vec=None):
+    '''
+    Set data in a list of axes where functions are plotted.
+    The length of list = the number of functions = the dimension of points.
+    Each function is a function with y values = points_data[j,:], x values = cummulative sum of weights.
+    If weights=None, the functions' line plots use equal weights from 0 to 1 to show only the function values.
+    If path_vec is not None, then re-arrange the function values and weights according to path_vec.
+    '''
+
+    points_data = np.array(points_data)
+    if len(points_data.shape) == 1:
+        points_data = points_data.reshape((1,points_data.size))
+    num_pts = points_data.shape[1] # number of points
+    data_dimension = points_data.shape[0] # dimension
+
+    if path_vec is not None:
+        ordered_points_data = points_data[:, path_vec]
+        ordered_weights = weights[path_vec]
+    else:
+        ordered_points_data = points_data
+        ordered_weights = weights
+
+    if len(ax_list) != data_dimension:
+        raise Exception('Wrong input of function lines in axis: \
+        dimension inconsistent with points_data!')
+
+    func_lines_list = []
+    for ax_f in ax_list:
+        func_line = [line for line in ax_f.lines if 'func' in line.get_label()][0]
+        func_lines_list += [func_line]
+
+    for j, line in enumerate(func_lines_list):
+        if weights is not None:
+            xx, yy = pc_fun_weights(ordered_points_data[j, :], ordered_weights)
+            line.set_data(xx, yy)
+        else:
+            line.set_data(1.0*np.arange(num_pts)/num_pts, ordered_points_data[j, :])
+    return
+
+def set_hist_data_in_axis(ax, weights, color_arr, path_vec=None, weight_max=1.0):
+    '''
+    Set data in the histogram plot of weights. (no points_data needed).
+    The y-limit of the axis can be adjusted using weight_max.
+    If path_vec is not None, the order of the bars in the histogram are re-arranged according to path_vec.
+    '''
+
+    num_pts =len(weights) # number of points
+
+    if color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
+
+    if path_vec is not None:
+        ordered_weights = weights[path_vec]
+        ordered_color_arr = color_arr[path_vec,:]
+        ordered_xticks = path_vec
+    else:
+        ordered_weights = weights
+        ordered_color_arr = color_arr
+        ordered_xticks = np.arange(num_pts)
+
+    ax.clear()
+    barcollection = ax.bar(np.arange(num_pts), ordered_weights, color = ordered_color_arr)
+    ax.set_ylim(0, weight_max)
+    ax.set_xticks(np.arange(num_pts))
+    ax.set_xticklabels(['%d'%idx for idx in ordered_xticks])
+    return
+
+def set_weight_bar_data_in_axis(ax, weights, color_arr, path_vec=None, ):
+    '''
+    Set data in the horizontal colored bar of weights. (no points_data needed).
+    If path_vec is not None, the order of the colors of weights are re-arranged according to path_vec.
+    '''
+
+    num_pts =len(weights) # number of points
+
+    if color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
+
+    if path_vec is not None:
+        ordered_weights = weights[path_vec]
+        ordered_color_arr = color_arr[path_vec,:]
+    else:
+        ordered_weights = weights
+        ordered_color_arr = color_arr
+
+    ax.clear()
+    ax.set_xlim([0, 1])
+    ax.set_ylim([-0.1, 0.1])
+    ax.set_aspect(0.2)
+    ax.set_yticks([])
+
+    for j in range(num_pts):
+        rect = plt.Rectangle((np.sum(ordered_weights[:j]), -0.1), ordered_weights[j], 0.2,
+                             facecolor=ordered_color_arr[j])
+        ax.add_artist(rect)
+        #rect_list.append(rect)
+    return
 
 def setup_cube3d_figure(radius = 1, min_radius = 0,
                         INCLUDE_INFO = True,
