@@ -210,7 +210,7 @@ def gaussian_log_ratio_inhomo(bin_index, output_value, input_set, input_prob_vec
         
     return -np.log(sum_exp)
 
-def gaussian_DKL(bin_index, gaussian_samples, input_set, input_prob_vec, inverse_cov_matrix, rho):
+def gaussian_DKL_inhomo(bin_index, gaussian_samples, input_set, input_prob_vec, inverse_cov_matrix, rho):
     """
     Compute D_KL(p(y|x) || p(y)) given the value of x and the samples of y according to p(y|x_value).
     log_ratio_fun: log(p(y|x)/p(y))
@@ -230,7 +230,7 @@ def gaussian_DKL(bin_index, gaussian_samples, input_set, input_prob_vec, inverse
                                   input_set, input_prob_vec, inverse_cov_matrix, rho)
     return dkl/num_samples
 
-def gaussian_bandit_iteration(input_set, inverse_cov_matrix, rho,
+def gaussian_bandit_iteration_inhomo(input_set, inverse_cov_matrix, rho,
                               initial_prob_vec = None, max_iter = 1000, batch_size = 1, 
                               dkl_discount_factor = "decrease", epsilon=0,                               
                               update_rule = "additive",#"direct", "multiply"

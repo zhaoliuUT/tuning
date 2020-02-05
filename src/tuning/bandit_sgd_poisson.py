@@ -126,20 +126,4 @@ def simple_sgd(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, 
         
     return curve_list, grad_list
 
-#------------Plotting function------------
 
-def plot_info_alternate(info_list, mark_list, index_list=None, color_sgd = 'r', color_bandit = 'b'):
-    if index_list is None:
-        index_list = np.arange(len(info_list))
-    else:
-        index_list = np.array(index_list)
-
-    sgd_idx = [i for i in index_list if mark_list[i]=='sgd']
-    bandit_idx = [i for i in index_list if mark_list[i]=='bandit']
-
-    #plt.figure(figsize=(16,8))
-    for idx in sgd_idx:
-        plt.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_sgd)
-
-    for idx in bandit_idx:
-        plt.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_bandit)
