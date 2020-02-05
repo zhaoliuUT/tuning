@@ -447,37 +447,52 @@ def set_weight_bar_data_in_axis(ax, weights, color_arr, path_vec=None, ):
         #rect_list.append(rect)
     return
 
-def setup_cube3d_figure(radius = 1, min_radius = 0,
-                        INCLUDE_INFO = True,
-                        INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
-                       ):
+def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
+                         INCLUDE_INFO=True,
+                         INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                        ):
+    '''
+    When numNeuro <= 2, create a square figure. When numNeuro == 3, create a cube figure.
+    with options INCLUDE_INFO, INCLUDE_FUN, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR for the different sub-figures (or information txt)
+    to be included.
+    min_radius, radius are min, max of point coordinate values, used to set the limits of axis.
+    (acts the same way as f+, f-).
+    '''
     
-    '''When numNeuro = 3, plot points in a cube.'''
-    ''' the 'radius' argument acts the same way as maxium FP.'''
-    
+    if data_dimension > 3:
+        raise Exception("Wrong input: data_dimension can't be more than 3!")
 
     # figure setup
     if INCLUDE_FUN or INCLUDE_WEIGHT or INCLUDE_WEIGHT_BAR:
         fig = plt.figure(figsize = (12, 6 + 1.0*INCLUDE_WEIGHT_BAR))
         gs0 = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
-        n_cols = 3*INCLUDE_FUN + INCLUDE_WEIGHT + INCLUDE_WEIGHT_BAR
-        ax_w_bar_idx = 3*INCLUDE_FUN
-        ax_w_idx = 3*INCLUDE_FUN + INCLUDE_WEIGHT_BAR
+        n_cols = data_dimension*INCLUDE_FUN + INCLUDE_WEIGHT + INCLUDE_WEIGHT_BAR
+        ax_w_bar_idx = data_dimension*INCLUDE_FUN
+        ax_w_idx = data_dimension*INCLUDE_FUN + INCLUDE_WEIGHT_BAR
 
         height_ratios = np.ones(n_cols)
         if INCLUDE_WEIGHT_BAR:
             height_ratios[ax_w_bar_idx] = 0.5
         gs01 = gridspec.GridSpecFromSubplotSpec(n_cols,1,subplot_spec=gs0[1], height_ratios=height_ratios)
 
-        ax_cube = fig.add_subplot(gs0[0], projection='3d')
-        ax_cube.set_aspect("equal")
+        # ax_points is used for the scatter plot of the data points
+        if data_dimension == 3:
+            ax_points = fig.add_subplot(gs0[0], projection='3d')
+        else: # data_dimension < =2
+            ax_points = fig.add_subplot(gs0[0])
+        ax_points.set_aspect("equal")
+
+        # ax_f_list is used for the line plots of the tuning curves (functions),
+        # with x values being the weight, y values being the function values (points' coordinates)
         if INCLUDE_FUN:
-            ax_f1 = fig.add_subplot(gs01[0])
-            ax_f2 = fig.add_subplot(gs01[1])
-            ax_f3 = fig.add_subplot(gs01[2])
-            ax_f_list = [ax_f1, ax_f2, ax_f3]
+            ax_f_list = []
+            for j in np.arange(data_dimension):
+                ax_f_list += [fig.add_subplot(gs01[j])]
         else:
             ax_f_list = None
+
+        # ax_w_bar is used for displaying a colorbar specifying the colors of the points,
+        # arranged according to the x corrdinates in ax_f_list
         if INCLUDE_WEIGHT_BAR:
             ax_w_bar = fig.add_subplot(gs01[ax_w_bar_idx])
             ax_w_bar.set_xlim([0, 1])
@@ -486,6 +501,8 @@ def setup_cube3d_figure(radius = 1, min_radius = 0,
             ax_w_bar.set_yticks([])
         else:
             ax_w_bar = None
+
+        # ax_w is used for plotting a histogram of the weights
         if INCLUDE_WEIGHT:
             ax_w = fig.add_subplot(gs01[ax_w_idx])
             #weight_max = np.max(np.array(weights_list))
@@ -494,33 +511,81 @@ def setup_cube3d_figure(radius = 1, min_radius = 0,
             ax_w = None
     else:
         fig = plt.figure(figsize = (8,8))
-        ax_cube = fig.gca(projection='3d')
-        ax_cube.set_aspect("equal")
+        if data_dimension == 3:
+            ax_points = fig.gca(projection='3d')
+        else:
+            ax_points = fig.gca()
+        ax_points.set_aspect("equal")
         ax_f_list = None
         ax_w_bar = None
         ax_w = None
 
-    # draw cube
-    draw_cube_in_axis(ax_cube, radius, min_radius)
+    # draw cube/square
+    # Note: the lines that are plotted for the boundaries are labeled as 'boundary' (1d or 2d)
+    # or 'boundary_0',...''boundary_11' (3d)
+    if data_dimension == 3:
+        draw_cube_in_axis(ax_points, radius, min_radius)
+    elif data_dimension == 2:
+        draw_square_in_axis(ax_points, radius, min_radius)
+    else:
+        draw_line_in_axis(ax_points, radius, min_radius)
     
     # plot scatter points
-    scat = ax_cube.scatter([radius], [radius], [radius], s= 0)#, edgecolor='k', alpha=1)
+    if data_dimension == 3:
+        scat = ax_points.scatter([radius], [radius], [radius], s= 0)#, edgecolor='k', alpha=1)
+    elif data_dimension == 2:
+        scat = ax_points.scatter([radius], [radius], s= 0)#, edgecolor='k', alpha=1)
+    else:
+        scat = ax_points.scatter([radius], [0], s= 0)#, edgecolor='k', alpha=1)
+
+    # plot path
+    if data_dimension == 3:
+        path_line = ax_points.plot3D([], [], [], lw = 1.5, alpha=0.7, label='path')[0]
+    else:
+        path_line = ax_points.plot([], [], lw = 1.5, alpha=0.7, label='path')[0]
+
     
     # plot info txt
+    # Note: the path line has label 'path'.
     if INCLUDE_INFO:
-        x0, y0, _ = proj3d.proj_transform(0,-0.3*radius, -1.5*radius,ax_cube.get_proj())
-        info_txt = ax_cube.text2D(x0,y0,"", fontsize = 15)
+        if data_dimension == 3:
+            x0, y0, _ = proj3d.proj_transform(1.6*radius, 1.25*radius, 0, ax_points.get_proj())
+            info_txt = ax_points.text2D(x0,y0,"", fontsize = 15,
+                                       ha='center', va='center',#horizontalalignment, verticalalignment
+                                       )
+        elif data_dimension <= 2:
+            xmin, xmax = ax_points.get_xlim()
+            ymin, ymax = ax_points.get_ylim()
+            x0 = xmin + 0.5*(xmax - xmin)
+            y0 = ymin - 0.02*(ymax - ymin)
+            info_txt = ax_points.text(x0, y0, "", fontsize = 14,
+                                      ha='center', va='center', #horizontalalignment, verticalalignment
+                                     )
+            #info_txt = ax_points.set_title( "", fontsize = 14)
     else:
         info_txt = None
 
-    # plot weight txt list
-    weight_txt_list = []#[ax_cube.text2D(0,0,"",fontsize = 14, color = 'k') for _ in range(18)]  # 'steelblue'
+    if data_dimension == 1:
+        func_colors = ['steelblue']
+    elif data_dimension == 2:
+        func_colors = ['seagreen','steelblue']
+    else:
+        func_colors = ['crimson', 'seagreen', 'steelblue']
+
+    # plot functions
+    # Note: line labels are 'func_0', 'func_1', 'func_2' e.g. in 3-d.
+    # the lines can also be retrived by e.g. ax_f_list[0].lines
     if INCLUDE_FUN:
-        line1, = ax_f1.plot([], [], color = 'crimson', lw = 2)
-        line2, = ax_f2.plot([], [], color = 'seagreen', lw = 2)
-        line3, = ax_f3.plot([], [], color = 'steelblue', lw = 2)
-        ax_f_list = [ax_f1, ax_f2, ax_f3]
-        lines_list = [line1, line2, line3]
+        func_lines_list = []
+        for j, ax_f in enumerate(ax_f_list):
+            func_line = ax_f.plot([], [], color = func_colors[j],
+                                  lw = 2, label='func_%d'%j)[0]
+            func_lines_list += [func_line]
+        #line1, = ax_f1.plot([], [], color = 'crimson', lw = 2)
+        #line2, = ax_f2.plot([], [], color = 'seagreen', lw = 2)
+        #line3, = ax_f3.plot([], [], color = 'steelblue', lw = 2)
+        #ax_f_list = [ax_f1, ax_f2, ax_f3]
+        #lines_list = [line1, line2, line3]
         for ax_f in ax_f_list:
             ax_f.set_xlim([0,1])
             ax_f.set_ylim([0,radius*1.01])
@@ -535,16 +600,20 @@ def setup_cube3d_figure(radius = 1, min_radius = 0,
             #           overhang = 0.1*radius,\
             #           length_includes_head= False, clip_on = False)
     else:
-        lines_list = None
+        func_lines_list = None
         
-    cube_fig_setup = {'fig':fig, 'ax_cube':ax_cube,
+    figure_handles = {'fig':fig,
+                      'data_dimension':data_dimension,
+                      'ax_points':ax_points,
                       'ax_f_list':ax_f_list, 'ax_w':ax_w, 'ax_w_bar':ax_w_bar,
-                      'scat': scat, 'lines_list':lines_list,
+                      'scat': scat,
+                      'path_line': path_line,
+                      'func_lines_list':func_lines_list,
                       'info_txt':info_txt,
-                      'weight_txt_list':weight_txt_list,
+                      'weights_txt_list':[],
                       'radius':radius, 'min_radius':min_radius,
                      }
-    return cube_fig_setup
+    return figure_handles
 
 def set_data_in_figure(cube_fig_setup, X, Y, Z, weight = None, info = None,
                        weight_tol = 1e-3, weight_format = '%.2f',
