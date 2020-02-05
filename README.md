@@ -1,7 +1,7 @@
 # tuning
 Python scripts for tuning curve optimization according to Efficient Coding Hypotheses 
 
-Note: currently only works for building in python2 environment; need to fix setup errors for python3 (mainly cython modules).
+Note: currently works for python 3.7.
 
 ## Installation instructions
 
