@@ -38,6 +38,36 @@ class Arrow3D(FancyArrowPatch):
         self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
         FancyArrowPatch.draw(self, renderer)
 
+def find_best_path(points_data):
+    '''Find the shortest closed path (in euclidean distance)
+    using Elastic Net Algorithm in mlrose package.'''
+    # tuning curve size: (numNeruo, numBin)
+    # numBin = num_pts
+    points_data = np.array(points_data)
+    if len(points_data.shape) == 1:
+        points_data = points_data.reshape((1,points_data.size))
+    num_pts = points_data.shape[1] # number of points
+
+    def euclidean_distance(x,y):
+        return np.sqrt(np.sum((x-y)**2))
+
+    dist_list = []
+    for i in range(num_pts):
+        for j in range(num_pts):
+            if i!=j:
+                dist_list.append((i, j, euclidean_distance(points_data[:,i], points_data[:,j])))
+
+    # Initialize fitness function object using dist_list
+    fitness_dists = mlrose.TravellingSales(distances = dist_list)
+
+    problem_fit = mlrose.TSPOpt(length = num_pts, fitness_fn = fitness_dists,
+                                maximize=False)
+
+    # Solve problem using the genetic algorithm
+    best_path, best_path_len = mlrose.genetic_alg(problem_fit, random_state = 2)
+
+    return best_path, best_path_len # length of closed curve
+
 def draw_cube_in_axis(ax, radius, min_radius):
     r = [min_radius, radius]
     for s, e in combinations(np.array(list(product(r, r, r))), 2):
