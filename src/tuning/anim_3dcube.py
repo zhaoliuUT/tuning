@@ -161,103 +161,193 @@ def get_color_array(num_pts, cmap_name = 'nipy_spectral', shuffle_colors = False
     which option of whether randomly shuffle the colors or not.
     Note: other commonly used colormap names: cubehelix,viridis,...
     '''
-    
+
     #color_arr = np.arange(num_pts)
     cmap = plt.cm.get_cmap(cmap_name, num_pts)
     color_arr = np.array([cmap(i) for i in range(num_pts)])
-        
+
     if shuffle_colors:
         np.random.shuffle(color_arr)
-        
+
     return color_arr
 
 
-def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
-                             weight_txt_list=None, radius = 1,
-                             weight_tol = 1e-3, weight_format = '%.2f',
-                             color_arr = None,
-                             cmap_name = 'nipy_spectral', shuffle_colors = False,
-                             point_size = 100,
+def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
+                             color_arr=None,
+                             radius=1,
+                             weights_txt_list=[],
+                             weight_tol=1e-3, weight_format='%.2f',
+                             point_size=100,
+                             path_close=True, path_color='crimson', linestyle='dashed',
                             ):
 
-    '''Set data in cube axis, including the scatter points, and weights' texts.'''
+    '''Set data (1/2/3-dim) in a given matplotlib axis, including the scatter points, weights' texts,
+    and the line connecting the path.
 
-    num_pts = len(X)
+    Main arguments:
+        ax:
+            matplotlib axis (usual 2d or 3d)
+        scat:
+            matplotlib.collections.PathCollection object, the return value of 'plt.scatter(...)'
+        points_data:
+            numpy array with shape (point dimension, number of points), specifying the coordinates of points
+            in columns (same shape as a tuning curve.)
+            Note: point dimension <= 3.
+    NO Return,
+        but the contents in the list 'weights_txt_list' is changed during the execution of the function
+        (since it is mutable type).
+    Main Keyword Arguments:
+        weights:
+            numpy array, 1-dimensional, with length = number of points.
+            Though usually assumed to be posive and sum up to one,
+            negative weights or weights with sum != 1 can also be plotted in the scatter plots.
+            If weights=None, no weight labels in the scatter plot.
+        path_vec:
+            numpy array, 1-dimensional, with length = number of points.
+            Contains integers in [0,number of points-1], specifying the order in the path.
+            If path_vec is not None, no path will be plotted.
+        color_arr:
+            color array with dimension (number of colors, 4).
+	    The number of colors must be the same as number of points.
+            Note: can be generated using get_color_arr(num_pts).
+        radius:
+            maximum value of the function.
+        weights_txt_list:
+            the list of texts which are weights' labels.
+            (note that not all texts in the axis are weights' labels, e.g. the 'f_1', 'f_2'.)
+    Other Keyword Arguments:
+        weight_tol = 1e-3, weight_format = '%.2f',
+            weight properties in the scatter plot.
+            Any point with weight absolute value < weight_tol will have empty weight label.
+            To set all weights label empty, simply use weight_format="".
+        point_size = 100,
+            size of points in the scatter plot.
+            Note: default point_size=100, appropriate for 3d. Choose smaller point_size for 1d/2d. e.g. 50.
+        path_close = True, path_color='crimson', linestyle='dashed',
+            path properties in the scatter plot: whether it is closed, the color and linestyle.
+    '''
+
+    # check inputs
+    points_data = np.array(points_data)
+    if len(points_data.shape) == 1:
+        # tuning is a (num_pts,) type array
+        points_data = points_data.reshape((1,points_data.size))
+    num_pts = points_data.shape[1] # number of points
+    data_dimension = points_data.shape[0] # dimension
+    if data_dimension == 1:
+        X = points_data[0,:] # plot data in the x direction
+        Y = np.zeros(num_pts) # y-direction always zero
+    elif data_dimension == 2:
+        X = points_data[0,:]
+        Y = points_data[1,:]
+    elif data_dimension == 3:
+        X = points_data[0,:]
+        Y = points_data[1,:]
+        Z = points_data[2,:]
+    else:
+        raise Exception("Wrong dimension of input points_data: must be <= 3!")
+
+    if (weights is not None) and len(weights) != num_pts:
+        raise Exception("Wrong dimension of input weights: inconsitent with points_data!")
+
+    path_line = None
+    for line in ax.lines:
+        if line.get_label()=='path':
+            path_line = line
+    if path_line is None:
+        raise Excpetion('Wrong input: no path line is found in the ax.lines!')
+
+    if data_dimension == 1 and path_vec is not None:
+        raise Exception("Wrong dimension of input points_data: \
+        unable to plot the path in 1-dimension!")
+
+    if path_vec is not None and len(path_vec)!= num_pts:
+        raise Exception('Wrong input of the path vector: \
+        the length must be equal to the number of points in point_data!')
+    elif path_vec is not None and np.any(path_vec >= num_pts):
+        raise Exception('Wrong input of the path vector: \
+        each number must be an interger in [0, number of points-1]!')
+
+    if color_arr is not None and color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
 
     # set scatter points' data
-    scat._offsets3d = juggle_axes(X, Y, Z, 'z')
+    if data_dimension <= 2:
+        scat.set_offsets(np.vstack([X.reshape(-1),Y.reshape(-1)]).T) # only works for 2d
+    else:
+        scat._offsets3d = juggle_axes(X, Y, Z, 'z')
 
     # set scatter points' colors, alpha, sizes
     if color_arr is None:
-            #color_arr = np.arange(num_pts)
-        cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
-        color_arr = np.array([cmap(i) for i in range(num_pts)])
-    if shuffle_colors:
-        np.random.shuffle(color_arr)
-    if color_arr.shape[0]!=num_pts:
-        raise Exception("Wrong dimension of color array!")
+        color_arr = get_color_array(num_pts)
 
-    scat._facecolor3d = color_arr
-    #scat.set_facecolor(color_arr) #python bug: this only works for 2d
+    if data_dimension <= 2:
+        scat.set_facecolor(color_arr) # only works for 2d
+    else:
+        scat._facecolor3d = color_arr
     scat.set_edgecolor('k')
     scat.set_alpha(1.0)
     sizes = np.ones(num_pts)*point_size
-    if weight is not None:
-        sizes[np.fabs(weight) < weight_tol] = 0
+    if weights is not None:
+        sizes[np.fabs(weights) < weight_tol] = 0
     scat.set_sizes(sizes)
 
-
     # set weight texts of the scatter points
-    if weight_txt_list is None:
-        txt_list = []
-    else:
-        txt_list = weight_txt_list
 
-    #radius = cube_fig_setup['radius']
-    #ax_cube = cube_fig_setup['ax_cube']
-    if len(txt_list) < num_pts:
+    if len(weights_txt_list) < num_pts:
         # add empty texts
-        txt_list += [ax.text2D(0,0,"",fontsize = 14, color = 'k')
-                     for _ in range(num_pts - len(txt_list))] # 'steelblue'
+        if data_dimension <=2:
+            weights_txt_list += [ax.text(0,0,"",fontsize = 14, color = 'k')
+                         for _ in range(num_pts - len(weights_txt_list))] # 'steelblue'
+        else:
+            weights_txt_list += [ax.text2D(0,0,"",fontsize = 14, color = 'k') # 3d axis
+                         for _ in range(num_pts - len(weights_txt_list))] # 'steelblue'
 
-    if weight is not None:
-        for txt, new_x, new_y, new_z, w in zip(txt_list[:num_pts], X, Y, Z, weight):
+    if weights is not None:
+        if data_dimension <=2:
+            for txt, new_x, new_y, w in zip(weights_txt_list[:num_pts], X, Y, weights):
+                if np.fabs(w) > weight_tol:
+                    txt.set_position((new_x+0.01*radius,new_y+0.01*radius))
+                    txt.set_text(weight_format%w)
+                else:
+                    txt.set_text("")
+        else:
+            for txt, new_x, new_y, new_z, w in zip(weights_txt_list[:num_pts], X, Y, Z, weights):
             # animating Text in 3D proved to be tricky. Tip of the hat to @ImportanceOfBeingErnest
             # for this answer https://stackoverflow.com/a/51579878/1356000
-            if np.fabs(w) > weight_tol:
-                x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
-                                                  ax.get_proj())
-                txt.set_position((x_,y_))
-                txt.set_text(weight_format%w)
-            else:
-                txt.set_text("")
+                if np.fabs(w) > weight_tol:
+                    x_, y_, _ = proj3d.proj_transform(new_x+0.1*radius, new_y+0.1*radius, new_z+0.1*radius, \
+                                                      ax.get_proj())
+                    txt.set_position((x_,y_))
+                    txt.set_text(weight_format%w)
+                else:
+                    txt.set_text("")
 
-    return txt_list
+    # set path data
+    ## get the coordinates in the order of path_vec
+    if path_vec is not None:
+        x_cords = [X[path_vec[i]] for i in range(len(path_vec))]
+        y_cords = [Y[path_vec[i]] for i in range(len(path_vec))]
+        if path_close:
+            x_cords += [X[path_vec[0]]]
+            y_cords += [Y[path_vec[0]]]
 
-def plot_path_in_axis(ax, X, Y, Z, path_vec,
-                      path_close=True, path_color='crimson', linestyle='dashed',
-                     ):
-    '''connect the path of points in cube axis:
-    the path is a vector of integers, each in [0,num_pts-1], specifying the order.
-    '''
+        if data_dimension == 3:
+            z_cords = [Z[path_vec[i]] for i in range(len(path_vec))]
+            if path_close:
+                z_cords += [Z[path_vec[0]]]
+        ##  set data of the line
+        if data_dimension == 2:
+            path_line.set_data(x_cords, y_cords)
+        else:
+            path_line.set_xdata(x_cords)
+            path_line.set_ydata(y_cords)
+            path_line.set_3d_properties(z_cords)
+            #path_line.set_data_3d(x_cords, y_cords, z_cords)  #python bug, currently not working
+        ## set color and linestyle
+        path_line.set_color(path_color)
+        path_line.set_linestyle(linestyle)
 
-    num_pts = len(X)
-    if np.any(path_vec >= num_pts):
-        raise Exception('Wrong input of the path vector!')
-
-    # connect the points by path in the order of path_vec
-    for i in range(len(path_vec) - 1):
-        ax.plot3D([X[path_vec[i]], X[path_vec[i+1]]],
-                  [Y[path_vec[i]], Y[path_vec[i+1]]],
-                  [Z[path_vec[i]], Z[path_vec[i+1]]],
-                  color=path_color, linestyle=linestyle,
-                  lw = 1.5, alpha=0.7)
-    if path_close:
-        ax.plot3D([X[path_vec[-1]], X[path_vec[0]]],
-                  [Y[path_vec[-1]], Y[path_vec[0]]],
-                  [Z[path_vec[-1]], Z[path_vec[0]]],
-                  color=path_color,linestyle=linestyle,
-                  lw = 1.5, alpha=0.7)
 
 def setup_cube3d_figure(radius = 1, min_radius = 0,
                         INCLUDE_INFO = True,
