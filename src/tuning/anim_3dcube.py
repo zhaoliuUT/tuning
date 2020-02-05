@@ -69,10 +69,16 @@ def find_best_path(points_data):
     return best_path, best_path_len # length of closed curve
 
 def draw_cube_in_axis(ax, radius, min_radius):
+    '''Draw a cube in 3d axis with corrdinates: [min_radius, radius]^3.
+    The plotted boundaries of the cube are labeled as 'boundary_0', ..., 'boundary_11'.
+    '''
     r = [min_radius, radius]
+    boundary_idx = 0
     for s, e in combinations(np.array(list(product(r, r, r))), 2):
         if np.sum(np.abs(s-e)) == r[1]-r[0]:
-            ax.plot3D(*zip(s, e), color="k", alpha = 0.5, lw = 1.5)#linestyle='--'
+            ax.plot3D(*zip(s, e), color="k", alpha = 0.5, lw = 1.5,
+                     label='boundary_%d'%boundary_idx)#linestyle='--'
+            boundary_idx += 1
 
     r2 = 1.4*radius
     arrowendpts =  [[r2, min_radius, min_radius],
@@ -94,6 +100,61 @@ def draw_cube_in_axis(ax, radius, min_radius):
     for k in range(len(endpts)):
         ax.text(endpts[k][0],endpts[k][1],endpts[k][2],r'$f_%d$'%(k+1),color = 'k',fontsize = 16)
     ax.view_init(azim = 30)
+
+def draw_square_in_axis(ax, radius, min_radius):
+    '''Draw a square in (2d) axis with corrdinates: [min_radius, radius]^2.
+    The plotted boundary of the cube is labeled as 'boundary'.
+    Also set appropriate axis limits and draw the arrows with labels 'f_1', 'f_2'.
+    '''
+    #ax.grid(True)
+    ax.set_xlim([min_radius-radius*0.1, radius*1.1])
+    ax.set_ylim([min_radius-radius*0.1,radius*1.1])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    ax.plot([min_radius, radius, radius, min_radius, min_radius], 
+           [min_radius, min_radius, radius, radius, min_radius], color='k', 
+            label='boundary',
+           )
+
+    ax.arrow(min_radius, min_radius, radius*1.05-min_radius, 0, # x,y, dx, dy
+             head_width=0.01*radius, head_length=0.05*radius, fc='k', ec='k'
+            )
+    ax.arrow(min_radius, min_radius, 0, radius*1.05-min_radius,
+             head_width=0.01*radius, head_length=0.05*radius, fc='k', ec='k'
+            )
+    # arrow ?
+    endpts = [[1.05*radius, min_radius-0.05*radius],
+              [min_radius-0.05*radius, 1.05*radius]]
+    for k in range(len(endpts)):
+        ax.text(endpts[k][0],endpts[k][1],r'$f_%d$'%(k+1),color ='k',fontsize = 15)
+
+def draw_line_in_axis(ax, radius, min_radius):
+    '''Draw a horizontal line in (2d) axis with x-coordinate in [min_radius, radius],
+    y-coordinate = 0.
+    The plotted line is labeled as 'boundary'.
+    Also set appropriate axis limits and draw an arrow on the x-axis with label 'f'.
+    '''
+    #ax.grid(True)
+    ax.set_xlim([min_radius-radius*0.1, radius*1.1]) # plot data in the x direction
+    # y-direction always zero
+    half_len = 0.5*(radius*1.2 - min_radius)
+    ax.set_ylim([-half_len, half_len])
+    ax.set_yticks([])
+    ax.set_xticks([])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.plot([min_radius, radius], [0, 0], 'k', '--',
+            label='boundary',
+           )
+    ax.text(1.1*radius-half_len, -0.15*half_len, r'$f$', color='k', fontsize=15)
+
 
 def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
                              weight_txt_list=None, radius = 1,
