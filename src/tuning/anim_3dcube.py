@@ -155,6 +155,22 @@ def draw_line_in_axis(ax, radius, min_radius):
            )
     ax.text(1.1*radius-half_len, -0.15*half_len, r'$f$', color='k', fontsize=15)
 
+def get_color_array(num_pts, cmap_name = 'nipy_spectral', shuffle_colors = False):
+    '''
+    Return a color array of shape (num_pts, 4), 
+    which option of whether randomly shuffle the colors or not.
+    Note: other commonly used colormap names: cubehelix,viridis,...
+    '''
+    
+    #color_arr = np.arange(num_pts)
+    cmap = plt.cm.get_cmap(cmap_name, num_pts)
+    color_arr = np.array([cmap(i) for i in range(num_pts)])
+        
+    if shuffle_colors:
+        np.random.shuffle(color_arr)
+        
+    return color_arr
+
 
 def set_scatter_data_in_axis(ax, scat, X, Y, Z, weight = None,
                              weight_txt_list=None, radius = 1,
