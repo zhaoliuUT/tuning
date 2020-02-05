@@ -11,6 +11,9 @@ import matplotlib.gridspec as gridspec
 from matplotlib import animation
 
 def pc_fun_weights(f_vec, weights):
+    '''For 1-d plotting purpose, generate the x coordinates and y coordinates of a piecewise constant
+    function (including the jump discontinuities).
+    '''
     if weights.size != f_vec.size:
         raise Exception("Dimension mismatch!")
 #     if np.fabs(np.sum(weights) - 1)>1e-5:
@@ -18,7 +21,7 @@ def pc_fun_weights(f_vec, weights):
     numBin = weights.size
     xtmp = np.cumsum(weights)
     xx = [ [xtmp[i]]*2 for i in range(0, numBin-1) ]  
-    xx = [0]+list(np.array(xx).reshape(-1)) + [1.0]
+    xx = [0]+list(np.array(xx).reshape(-1)) + [xtmp[-1]]
     yy = [ [f_vec[i], f_vec[i+1]] for i in range(0, numBin-1) ] 
     yy = [f_vec[0]] + list(np.array(yy).reshape(-1)) + [f_vec[-1]]
     return xx, yy
