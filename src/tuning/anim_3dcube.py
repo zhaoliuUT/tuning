@@ -205,7 +205,7 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
         path_vec:
             numpy array, 1-dimensional, with length = number of points.
             Contains integers in [0,number of points-1], specifying the order in the path.
-            If path_vec is not None, no path will be plotted.
+            If path_vec=None, no path will be plotted.
         color_arr:
             color array with dimension (number of colors, 4).
 	    The number of colors must be the same as number of points.
@@ -457,6 +457,14 @@ def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
     to be included.
     min_radius, radius are min, max of point coordinate values, used to set the limits of axis.
     (acts the same way as f+, f-).
+
+    Return figure_handles: a dictionary which contains figure, axes, lines, scattered points, ...:
+    keys:
+        'fig', 'data_dimension', 'radius', 'min_radius',
+        'ax_points', 'ax_f_list', 'ax_w', 'ax_w_bar',
+        'scat', 'path_line', 'func_lines_list',
+        'info_txt', 'weights_txt_list'
+
     '''
     
     if data_dimension > 3:
@@ -615,85 +623,125 @@ def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
                      }
     return figure_handles
 
-def set_data_in_figure(cube_fig_setup, X, Y, Z, weight = None, info = None,
-                       weight_tol = 1e-3, weight_format = '%.2f',
-                       color_arr = None, cmap_name = 'nipy_spectral', shuffle_colors = False,
-                       point_size = 100,
-                       weight_max = 1.0,
-                       info_format = 'MI = %.4f',
+def set_data_in_figure(figure_handles, points_data, weights=None, path_vec=None,
+                       color_arr=None,
+                       info=None, info_format='MI = %.4f',
+                       weight_max=None,
+                       **kwargs, #kwargs in set_scatter_data_in_axis
                       ):
-    '''Set data in cube_fig_setup (all axis)'''
     
-    num_pts = len(X)
+    '''Set data in figure_handles (all axis). Helper function for gen_mixed_plots and also
+    for the convenience of real-time plotting.
     
+    Main argument:
+        figure_handles:
+            a dictionary of figure handles (contains figure, axes, texts, lines, etc.)
+            usually the return value of create_figure_canvas.
+            see doc of create_figure_canvas for details.
+        points_data:
+            numpy array with shape (point dimension, number of points), specifying the coordinates of points
+            in columns (same shape as a tuning curve.)
+            Note: point dimension <= 3.
+    No Return.
+        (but properties in the figure are changed.)
+    Main Keyword Arguments:
+        weights:
+            numpy array, 1-dimensional, with length = number of points.
+            Though usually assumed to be posive and sum up to one,
+            negative weights or weights with sum != 1 can also be plotted.
+            If weights=None, no weight labels in the scatter plot, and the functions' line plots
+            use equal weights from 0 to 1 to show only the function values
+            (see doc of set_func_data_in_axis_list).
+        path_vec:
+            numpy array, 1-dimensional, with length = number of points.
+            Contains integers in [0,number of points-1], specifying the order in the path.
+            If path_vec is not None, a line will be plotted connecting the scattered points
+            in the scatter plot, and the function plots, the weight bar plot and weight
+            histogram plot all follow in the order of path_vec.
+            Otherwise, no path will be plotted in the scatter plot, the other axes follow the
+            default order.
+        color_arr:
+            color array with dimension (number of colors, 4).
+            The number of colors must be the same as number of points.
+            Note: can be generated using get_color_arr(num_pts).
+        info:
+            the information to be displayed in the text in the scatter points' axis.
+        info_format:
+            info text format.
+        weight_max:
+            the y-limit used in the weight histogram plot.
+
+    Other Keyword Arguments:
+        see the keyword arguments of set_scatter_data_in_axis.
+
+    '''
+
+    points_data = np.array(points_data)
+    if len(points_data.shape) == 1:
+        # tuning is a (num_pts,) type array
+        points_data = points_data.reshape((1,points_data.size))
+    num_pts = points_data.shape[1]
+    data_dimension = points_data.shape[0]
+    if data_dimension != figure_handles['data_dimension']:
+        raise Exception("Wrong dimension of input points_data: inconsistent with the figure handles!")
+#     if data_dimension > 3:
+#         raise Exception("Wrong dimension of input points_data!")
+
+#     if (weights is not None) and len(weights) != num_pts:
+#         raise Exception("Wrong dimension of input weights!")
+
     # generate color array if color_arr is None
+    if color_arr is not None and color_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
     if color_arr is None:
-            #color_arr = np.arange(num_pts)
-        cmap = plt.cm.get_cmap(cmap_name, num_pts) # other colormap names: cubehelix,viridis,...
-        color_arr = np.array([cmap(i) for i in range(num_pts)])
-    if shuffle_colors:
-        np.random.shuffle(color_arr)
-    if color_arr.shape[0]!=num_pts:
-        raise Exception("Wrong dimension of color array!")
+        color_arr = get_color_array(num_pts)
+    # Note: color_arr is used not only in scatter plot but also in weight bar and weight histogram
 
     # set data in the cube axis
-    ax_cube = cube_fig_setup['ax_cube']
-    scat = cube_fig_setup['scat']
-    weight_txt_list = cube_fig_setup['weight_txt_list']
-    radius = cube_fig_setup['radius']
+    ax_points = figure_handles['ax_points']
+    scat = figure_handles['scat']
+    weights_txt_list = figure_handles['weights_txt_list']
+    radius = figure_handles['radius']
 
-    weight_txt_list = set_scatter_data_in_axis(
-        ax_cube, scat, X, Y, Z, weight=weight,
-        weight_txt_list=weight_txt_list, radius=radius,
-        weight_tol=weight_tol, weight_format=weight_format,
-        color_arr=color_arr, cmap_name=cmap_name, shuffle_colors=shuffle_colors,point_size=point_size,
+    set_scatter_data_in_axis(
+        ax_points, scat, points_data, weights=weights,
+        weights_txt_list=weights_txt_list, # note: this list is changed in executing the function 'set_scatter_data_in_axis'
+        radius=radius,
+        color_arr=color_arr,
+        path_vec=path_vec,
+        **kwargs,
+#         weight_tol=weight_tol, weight_format=weight_format,
+#         color_arr=color_arr, cmap_name=cmap_name, shuffle_colors=shuffle_colors,point_size=point_size,
+#         path_vec = path_vec,
+#         path_close =path_close, path_color=path_color, linestyle=linestyle,
     )
-    cube_fig_setup['weight_txt_list'] = weight_txt_list
-                
-    # set lines' data
-    if cube_fig_setup['lines_list'] is not None:
-        line1, line2, line3 = cube_fig_setup['lines_list']
-        if weight is not None:
-            x1, y1 = pc_fun_weights(X, weight)#pc_fun_weights(X_list[i],weights_list[i])
-            x2, y2 = pc_fun_weights(Y, weight)
-            x3, y3 = pc_fun_weights(Z, weight)
+    #figure_handles['weights_txt_list'] = weights_txt_list
 
-            line1.set_data(x1, y1)
-            line2.set_data(x2, y2)
-            line3.set_data(x3, y3)
-        else:
-            line1.set_data(1.0*np.arange(num_pts)/num_pts, X)
-            line2.set_data(1.0*np.arange(num_pts)/num_pts, Y)
-            line3.set_data(1.0*np.arange(num_pts)/num_pts, Z)
-            
+    # set function lines' data
+    if figure_handles['ax_f_list'] is not None:
+        set_func_data_in_axis_list(figure_handles['ax_f_list'], points_data, weights, path_vec=path_vec)
+
     # set weight histogram' data
-    ax_w = cube_fig_setup['ax_w']
-    if ax_w is not None:
-        ax_w.clear()
-        barcollection = ax_w.bar(np.arange(num_pts), weight, color = color_arr)
-        # set axis limit
-        ax_w.set_ylim(0, weight_max)
+    if weight_max is not None:
+        curr_weight_max = weight_max
+    elif weights is not None:
+        curr_weight_max = np.max(np.array(weights)) # maximum weight
+    else:
+        curr_weight_max = 1.0
+
+    if figure_handles['ax_w'] is not None:
+        set_hist_data_in_axis(figure_handles['ax_w'], weights, color_arr,path_vec=path_vec,
+                              weight_max=curr_weight_max)
 
     # set weight bar's data
-    ax_w_bar = cube_fig_setup['ax_w_bar']
-    if ax_w_bar is not None:
-        #rect_list = []
-        ax_w_bar.clear()
-        ax_w_bar.set_xlim([0, 1])
-        ax_w_bar.set_ylim([-0.1, 0.1])
-        ax_w_bar.set_aspect(0.2)
-        ax_w_bar.set_yticks([])
-        for j in range(num_pts):
-            rect = plt.Rectangle((np.sum(weight[:j]), -0.1), weight[j], 0.2,
-                                 facecolor=color_arr[j])
-            ax_w_bar.add_artist(rect)
-            #rect_list.append(rect)
+    if figure_handles['ax_w_bar'] is not None:
+        set_weight_bar_data_in_axis(figure_handles['ax_w_bar'], weights, color_arr,
+                                    path_vec=path_vec, )
 
     # set info data
-    if (cube_fig_setup['info_txt'] is not None) and (info is not None):
-        cube_fig_setup['info_txt'].set_text(info_format%info)
-
-    return cube_fig_setup
+    if (figure_handles['info_txt'] is not None) and (info is not None):
+        figure_handles['info_txt'].set_text(info_format%info)
+    return
 
 
 def cube3dplots(X, Y, Z, weight = None, info = None,
