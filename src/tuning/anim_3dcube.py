@@ -745,11 +745,11 @@ def set_data_in_figure(figure_handles, points_data, weights=None, path_vec=None,
 
 
 def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
-                    color_arr=None, info_format='MI = %.4f', weight_max=None,
+                    color_arr=None,
                     radius=1, min_radius=0,
                     INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
                     FILE_NAME="", ADD_TIME=True, 
-                     **kwargs, #kwargs in set_scatter_data_in_axis
+                     **kwargs, #kwargs in set_scatter_data_in_axis, set_data_in_figure.
                    ):
     '''Create a figure and plot scatter points (with the path and weight labels),
     functions, color bar of weights and histogram of weights.
@@ -767,7 +767,7 @@ def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
             usually the return value of create_figure_canvas.
             see doc of create_figure_canvas for details.
     Main Keyword Arguments:
-        weights, info, path_vec, color_arr, info_format, weight_max:
+        weights, info, path_vec, color_arr:
             see the doc of 'set_data_in_figure'.
         radius, min_radius, INCLUDE_FUN, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR:
             see the doc of 'create_figure_canvas'.
@@ -778,7 +778,7 @@ def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
             If ADD_TIME = True, actual file name used  = FILENAME + current time (date+time to seconds).
             For not saving the figure, simply use FILE_NAME = "" and ADD_TIME = False.
     Other Keyword Arguments:
-        see the doc of 'set_scatter_data_in_axis'.
+        see the docs of 'set_data_in_figure' (info_format, weight_max, etc.) and 'set_scatter_data_in_axis'.
     '''
 
     # check inputs
@@ -816,7 +816,7 @@ def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
 
     set_data_in_figure(
         figure_handles, points_data, weights=weights, info=info, path_vec=path_vec,
-        color_arr=color_arr, info_format=info_format, weight_max=weight_max,
+        color_arr=color_arr,
         **kwargs,
     )
 
