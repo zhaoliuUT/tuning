@@ -984,4 +984,48 @@ def gen_mixed_anim(points_list, weights_list=None, info_list=None,
     anim.save(filename, writer="ffmpeg")
     return anim
 
+# # example: real-time in matplotlib notebook.
 
+# %matplotlib notebook
+
+# # tuning_list = [np.random.uniform(0.1, 1, (3,i+1)) for i in range(10)]
+# tuning_list = [np.random.uniform(0.1, 1, (2,i+1)) for i in range(10)]
+
+# ww_list_raw = [np.random.uniform(0, 1, i+1) for i in range(10)]
+# ww_list = [ww/np.sum(ww) for ww in ww_list_raw]
+
+# info_list = list(np.arange(10)+1)
+# path_list = [np.arange(i+1) for i in range(10)]
+# for i in range(10):
+#     np.random.shuffle(path_list[i])
+
+# max_num_pts = 10
+# large_cmap = plt.cm.get_cmap('nipy_spectral', max_num_pts)
+# large_color_arr = np.array([large_cmap(i) for i in range(max_num_pts)])
+
+
+# figure_handles0 = create_figure_canvas(
+#     data_dimension=2, 
+# #     data_dimension=3,
+#     radius=1, min_radius=0.1,
+# #     INCLUDE_FUN=False,
+# #     INCLUDE_WEIGHT=False,
+# #     INCLUDE_WEIGHT_BAR=False,
+# )
+# fig0 = figure_handles0['fig']
+# fig0.canvas.draw()
+
+
+# for i in range(len(tuning_list)):
+#     set_data_in_figure(figure_handles0,  tuning_list[i], 
+#                        weights=ww_list[i], info=info_list[i],
+#                        path_vec=path_list[i],
+# #                        weight_tol=1e-3, weight_format='%.2f',
+#                        color_arr=large_color_arr[:(i+1),:],
+# #                        weight_max=np.max([np.max(ww) for ww in ww_list])
+# #                        point_size=100,
+# #                        weight_max=1.0,
+# #                        info_format='My info = %d',
+#                       )
+#     fig0.canvas.draw()
+#     time.sleep(1) # sleep for 1 second
