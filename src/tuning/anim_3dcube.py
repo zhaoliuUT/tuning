@@ -744,74 +744,84 @@ def set_data_in_figure(figure_handles, points_data, weights=None, path_vec=None,
     return
 
 
-def cube3dplots(X, Y, Z, weight = None, info = None,
-                radius = 1, min_radius = 0,
-                weight_tol = 1e-3, weight_format = '%.2f',
-                weight_max = None, info_format = 'MI = %.4f',
-                color_arr = None, cmap_name = 'nipy_spectral', shuffle_colors = False,
-                point_size = 100,
-                path_vec = None, path_close = True,
-                path_color='crimson', linestyle='dashed',
-                INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
-                FILE_NAME = "", ADD_TIME = True):
-    '''Plot a single cube figure.'''
+def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
+                    color_arr=None, info_format='MI = %.4f', weight_max=None,
+                    radius=1, min_radius=0,
+                    INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                    FILE_NAME="", ADD_TIME=True, 
+                     **kwargs, #kwargs in set_scatter_data_in_axis
+                   ):
+    '''Create a figure and plot scatter points (with the path and weight labels),
+    functions, color bar of weights and histogram of weights.
     
+    The figure can be saved in '.png' format with timestamp.
+    
+    Main argument:
+        points_data:
+            numpy array with shape (point dimension, number of points), specifying the coordinates of points
+            in columns (same shape as a tuning curve.)
+            Note: point dimension <= 3.
+    Return:
+        figure_handles:
+            a dictionary of figure handles (contains figure, axes, texts, lines, etc.)
+            usually the return value of create_figure_canvas.
+            see doc of create_figure_canvas for details.
+    Main Keyword Arguments:
+        weights, info, path_vec, color_arr, info_format, weight_max:
+            see the doc of 'set_data_in_figure'.
+        radius, min_radius, INCLUDE_FUN, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR:
+            see the doc of 'create_figure_canvas'.
+            NOTE:
+            if weights=None, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR are automatically taken to be False.
+        FILE_NAME, ADD_TIME:
+            the file name of the figure to be saved, and the option for adding a time stamp.
+            If ADD_TIME = True, actual file name used  = FILENAME + current time (date+time to seconds).
+            For not saving the figure, simply use FILE_NAME = "" and ADD_TIME = False.
+    Other Keyword Arguments:
+        see the doc of 'set_scatter_data_in_axis'.
+    '''
+
     # check inputs
-    
-    if len(X)!=len(Y) or len(Y)!=len(Z):
-        raise Exception('Wrong dimension of inputs!')    
-    if weight is not None and len(weight)!= len(X):
-        raise Exception('Wrong dimension of inputs: weight')
-#     elif np.fabs(np.sum(weight) - 1)>1e-5:
-#         raise Exception('Wrong input of weight: sum error!')
+    points_data = np.array(points_data)
+    if len(points_data.shape) == 1:
+        # tuning is a (num_pts,) type array
+        points_data = points_data.reshape((1,points_data.size))
+    num_pts = points_data.shape[1]
+    data_dimension = points_data.shape[0]
+
+    if weights is None:
+        INCLUDE_WEIGHT = False
+        INCLUDE_WEIGHT_BAR = False
+    #if (weights is None) and (INCLUDE_WEIGHT or INCLUDE_WEIGHT_BAR):
+    #    raise Exception("Unable to plot weights: weights is None!")
 
     if info is None:
         INCLUDE_INFO = False
     else:
         INCLUDE_INFO = True
-        
-    num_pts = len(X) # number of points
-    if weight_max is not None:
-        curr_weight_max = weight_max
-    elif weight is not None:
-        curr_weight_max = np.max(np.array(weight)) # maximum weight
-    else:
-        curr_weight_max = 1.0
 
-    curr_radius = max(np.max(np.array([X,Y,Z])), radius) # radius
-    curr_min_radius = min(np.min(np.array([X,Y,Z])), min_radius) # min_radius
-    
+    curr_radius = max(np.max(points_data), radius) # radius
+    curr_min_radius = min(np.min(points_data), min_radius) # min_radius
+
     # figure setup
-    
-    cube_fig_setup =  setup_cube3d_figure(
-        radius = curr_radius, min_radius = curr_min_radius,
-        #weight_max = weight_max, #weight_tol = weight_tol,
-        #cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-        INCLUDE_INFO = INCLUDE_INFO,
-        INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
-    )
-    
-    # set data
-    cube_fig_setup = set_data_in_figure(
-        cube_fig_setup, X, Y, Z, weight = weight, info = info,
-        weight_tol = weight_tol, weight_format = weight_format,
-        weight_max = curr_weight_max, info_format = info_format,
-        color_arr = color_arr,
-        cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-        point_size = point_size,
+
+    figure_handles = create_figure_canvas(
+        data_dimension=data_dimension,
+        radius=curr_radius, min_radius=curr_min_radius,
+        INCLUDE_INFO=INCLUDE_INFO,
+        INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
     )
 
-    # plot path
-    
-    if path_vec is not None:
-        plot_path_in_axis(
-            cube_fig_setup['ax_cube'], X, Y, Z,
-            path_vec, path_close=path_close,
-            path_color=path_color, linestyle=linestyle,
-        )
-    
+    # set data
+
+    set_data_in_figure(
+        figure_handles, points_data, weights=weights, info=info, path_vec=path_vec,
+        color_arr=color_arr, info_format=info_format, weight_max=weight_max,
+        **kwargs,
+    )
+
     # save figure
-    
+
     if ADD_TIME: 
         timestr = time.strftime("%m%d-%H%M%S")
     else:
@@ -824,7 +834,7 @@ def cube3dplots(X, Y, Z, weight = None, info = None,
         except:
             os.makedirs(directory)  
     plt.savefig(filename)
-    return cube_fig_setup
+    return figure_handles
 
 def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, 
                 radius = 1, min_radius = 0,
