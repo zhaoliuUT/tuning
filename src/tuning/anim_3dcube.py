@@ -1005,7 +1005,7 @@ def gen_mixed_anim(points_list, weights_list=None, info_list=None,
 
 
 # figure_handles0 = create_figure_canvas(
-#     data_dimension=2, 
+#     data_dimension=2,
 # #     data_dimension=3,
 #     radius=1, min_radius=0.1,
 # #     INCLUDE_FUN=False,
@@ -1017,7 +1017,7 @@ def gen_mixed_anim(points_list, weights_list=None, info_list=None,
 
 
 # for i in range(len(tuning_list)):
-#     set_data_in_figure(figure_handles0,  tuning_list[i], 
+#     set_data_in_figure(figure_handles0,  tuning_list[i],
 #                        weights=ww_list[i], info=info_list[i],
 #                        path_vec=path_list[i],
 # #                        weight_tol=1e-3, weight_format='%.2f',
