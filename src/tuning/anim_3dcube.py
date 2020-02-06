@@ -836,73 +836,105 @@ def gen_mixed_plots(points_data, weights=None, info=None, path_vec=None,
     plt.savefig(filename)
     return figure_handles
 
-def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None, 
-                radius = 1, min_radius = 0,
-                weight_tol = 1e-3, weight_format = '%.2f',
-                weight_max = None, info_format = 'MI = %.4f',
-                color_arr_list = None,
-                cmap_name = 'nipy_spectral', shuffle_colors = False,
-                point_size = 100,
-                INCLUDE_FUN = True, INCLUDE_WEIGHT = True, INCLUDE_WEIGHT_BAR = True,
-                FILE_NAME = "", ADD_TIME = True, interval = 1000):
+def gen_mixed_anim(points_list, weights_list=None, info_list=None,
+                   path_vec_list=None,
+                   color_arr_list=None,
+                   radius=1, min_radius=0,
+                   INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                   FILE_NAME="", ADD_TIME=True,
+                   interval=1000,
+                   **kwargs,
+                  ):
     
-    '''Plot animation in 3d cube.'''
-    
-    # check inputs    
-        
-    if len(X_list) != len(Y_list) or len(Y_list)!= len(Z_list):
-        raise Exception('Wrong dimension of inputs!')
-    
-    elif len(X_list[0])!=len(Y_list[0]) or len(Y_list[0])!=len(Z_list[0]):
-        raise Exception('Wrong dimension of inputs!')   
-    
-    if weights_list is not None:
-        if len(weights_list) != len(X_list) or len(weights_list[0])!= len(X_list[0]):
-            raise Exception('Wrong dimension of inputs: weight_list')
-        elif np.fabs(np.sum(weights_list[0]) - 1)>1e-5:
-            raise Exception('Wrong input of weights: sum error!')
+    '''Create an animation, where each frame is a figure plotting the scatter points
+    (with the path and weight labels), functions, color bar of weights and histogram of weights.
+
+    The animation can be saved in '.mp4' format with timestamp.
+
+    Main argument:
+        points_list:
+            a list of points_data. Each item is a numpy array with shape
+            (point dimension, number of points).
+            (same dimension as a list of tuning curves)
+            Note: point dimension <= 3.
+            Note: Each points_data must have the same dimension,
+            but the number of points can be different.
+    Return:
+        anim:
+            the generated animation object.
+    Main Keyword Arguments:
+        weights_list, info_list, path_vec_list, color_arr_list:
+            lists of weights, information, path vector, color arrays,
+            all with length = the length of points_list.
+            for requirements of each 'weights', 'info', 'path_vec', 'color_arr',
+            see the doc of 'set_data_in_figure'.
+        radius, min_radius, INCLUDE_FUN, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR:
+            see the doc of 'create_figure_canvas'.
+            NOTE:
+            if weights=None, INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR are automatically taken to be False.
+        FILE_NAME, ADD_TIME:
+            the file name of the animation to be saved (don't have to include '.pm4'),
+            and the option for adding a time stamp.
+            If ADD_TIME = True, actual file name used  = FILENAME + current time (date+time to seconds).
+            For not saving the animation, simply use FILE_NAME = "" and ADD_TIME = False.
+        interval:
+            the delay between frames in milliseconds.
+    Other Keyword Arguments:
+        see the docs of 'set_data_in_figure' (info_format, weight_max, etc.) and 'set_scatter_data_in_axis'.
+
+    '''
+
+    # check inputs
+    list_lens = [len(ll) for ll in [weights_list, info_list, path_vec_list, color_arr_list]
+                  if ll is not None]
+    if len(list_lens) > 0 and np.any(np.array(list_lens)!=len(points_list)):
+        raise Exception('Inconsistency: the length of weights_list, info_list, or path_vec_list \
+        is not the same as the length of points_list!')
+
+    if weights_list is None:
+        INCLUDE_WEIGHT = False
+        INCLUDE_WEIGHT_BAR = False
 
     if info_list is None:
         INCLUDE_INFO = False
     else:
         INCLUDE_INFO = True
-    
-    
-    num_pts = len(X_list[0])#np.max([len(X) for X in X_list]) # number of points
 
-    num_frames = len(X_list) # number of frames
-    if weight_max is not None:
-        curr_weight_max = weight_max
-    elif weight is not None:
-        curr_weight_max = np.max([np.max(w) for w in weights_list]) # maximum weight
+    # number of frames
+    num_frames = len(points_list)
+
+    # data dimension
+    first_points_data = points_list[0]
+    if len(first_points_data.shape) == 1:
+        data_dimension = 1
     else:
-        curr_weight_max = 1.0
+        data_dimension = first_points_data.shape[0]
 
-    x_max = np.max([np.max(X_list[i]) for i in range(num_frames)])
-    y_max = np.max([np.max(Y_list[i]) for i in range(num_frames)])
-    z_max = np.max([np.max(Z_list[i]) for i in range(num_frames)])
-    x_min = np.min([np.min(X_list[i]) for i in range(num_frames)])
-    y_min = np.min([np.min(Y_list[i]) for i in range(num_frames)])
-    z_min = np.min([np.min(Z_list[i]) for i in range(num_frames)])
-    curr_radius = max(x_max, y_max, z_max, radius)#max(np.max(np.array([X_list,Y_list,Z_list])), radius) # radius
-    curr_min_radius = min(x_min, y_min, z_min, min_radius)#min(np.min(np.array([X_list,Y_list,Z_list])), min_radius) # min_radius
-    # figure setup
-    
-    cube_fig_setup =  setup_cube3d_figure(
-        radius = curr_radius, min_radius = curr_min_radius,
-        #weight_max = weight_max, #weight_tol = weight_tol,
-        #cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-        INCLUDE_INFO = INCLUDE_INFO,
-        INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
+    # radius, min radius
+    points_max = np.max([np.max(points_list[i]) for i in range(num_frames)])
+    points_min = np.min([np.min(points_list[i]) for i in range(num_frames)])
+    # not using np.array(points_list),
+    # since the points_data shape (especially, num_pts) might be different.
+    curr_radius = max(points_max, radius)
+    curr_min_radius = min(points_min, min_radius)
+
+
+    # canvas setup
+
+    figure_handles =  create_figure_canvas(
+        data_dimension=data_dimension,
+        radius=curr_radius, min_radius=curr_min_radius,
+        INCLUDE_INFO=INCLUDE_INFO,
+        INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT, INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
     )
 
-    # animation function.  This is called sequentially
+    # animation function (this is called sequentially)
     
     def animate(i):
         if weights_list is not None:
-            curr_weight = weights_list[i]
+            curr_weights = weights_list[i]
         else:
-            curr_weight = None
+            curr_weights = None
         if info_list is not None:
             curr_info = info_list[i]
         else:
@@ -911,24 +943,34 @@ def anim3dplots(X_list, Y_list, Z_list, weights_list = None, info_list = None,
             curr_color_arr = color_arr_list[i]
         else:
             curr_color_arr = None
-        _ = set_data_in_figure(
-            cube_fig_setup, X_list[i], Y_list[i], Z_list[i], weight = curr_weight, info = curr_info,
-            weight_tol = weight_tol, weight_format = weight_format,
-            weight_max = curr_weight_max, info_format = info_format,
-            color_arr = curr_color_arr,
-            cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-            point_size = point_size,
-        )
-        return cube_fig_setup
+        if path_vec_list is not None:
+            curr_path_vec = path_vec_list[i]
+        else:
+            curr_path_vec = None
 
-    # call the animator.  blit=True means only re-draw the parts that have changed.
-    fig = cube_fig_setup['fig']
+        # set data
+        set_data_in_figure(
+            figure_handles, points_list[i],
+            weights=curr_weights, info=curr_info,
+            path_vec=curr_path_vec,
+            color_arr=curr_color_arr,
+            **kwargs,
+        )
+
+        return figure_handles
+
+    # call the animator
+    fig = figure_handles['fig']
     anim = animation.FuncAnimation(fig, animate,
-                                   frames = num_frames, 
-                                   interval=interval)#, blit=True  
-    # save the animator.
-    
-    if ADD_TIME: 
+                                   frames = num_frames,
+                                   interval=interval,
+                                   #blit = True,
+                                   # (blit=True means only re-draw the parts that have changed)
+                                  )
+
+    # save the animator
+
+    if ADD_TIME:
         timestr = time.strftime("%m%d-%H%M%S")
     else:
         timestr = ""
