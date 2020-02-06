@@ -816,36 +816,34 @@ class TuningCurve_Noncyclic:
         
         
     @staticmethod 
-    def animation_tc_list_cube(tc_list, INCLUDE_FUN = True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR = True,
-                               weight_tol = 1e-3,  weight_format = '%.2f',
-                               cmap_name = 'nipy_spectral', shuffle_colors = False,
-                               FILE_NAME = "", ADD_TIME = True, interval = 1000):
-        X_list = []
-        Y_list = []
-        Z_list = []
+    def animation_tc_list_cube(tc_list,
+			       INCLUDE_FUN= True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+			       FILE_NAME="", ADD_TIME=True, interval=1000,
+                               **kwargs,
+                               ):
+	'''
+	For details of the keyword arguments: see the doc of 'gen_mixed_anim' in 'anim_3dcube.py'.
+	'''
+        points_list = []
         weights_list = []
         info_list = []
-        
-        radius = 0
+
         test_num = len(tc_list)
-    
-            
+
+
         for i in range(test_num):
-            if tc_list[i].numNeuro!= 3:
-                raise Exception("Wrong dimension of tuning curve! Must be 3 neurons.")
-            X_list.append(tc_list[i].tuning[0])
-            Y_list.append(tc_list[i].tuning[1])
-            Z_list.append(tc_list[i].tuning[2])
+            if tc_list[i].numNeuro > 3:
+                raise Exception("Wrong dimension of tuning curve! Must be <=3 neurons.")
+            points_list.append(tc_list[i].tuning)
             weights_list.append(tc_list[i].weight)
             info_list.append(tc_list[i].info)
-            radius = max(radius, np.amax(tc_list[i].tuning))
-        radius = np.ceil(radius)
-        anim = anim3dplots(X_list, Y_list, Z_list, weights_list, info_list, radius = radius,
-                           INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT = INCLUDE_WEIGHT,
-                           INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
-                           weight_tol = weight_tol, weight_format = weight_format,
-                           cmap_name = cmap_name, shuffle_colors = shuffle_colors,
-                           FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME,
-                           interval = interval)
+
+        anim = gen_mixed_anim(points_list, weights_list, info_list,
+                              INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
+                              INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
+                              FILE_NAME=FILE_NAME, ADD_TIME=ADD_TIME,
+                              interval=interval,
+                              **kwargs,
+                              )
         return anim
 

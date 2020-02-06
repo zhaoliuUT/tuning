@@ -468,8 +468,7 @@ class TuningCurveOptimizer_Noncyclic:
                        INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, # options for non-cube animation
                        INCLUDE_WEIGHT=True,# option for both
                        INCLUDE_FUN = True, INCLUDE_WEIGHT_BAR = True, # options for cube animation
-                       weight_tol = 1e-3, weight_format = '%.2f',
-                       cmap_name = 'nipy_spectral', shuffle_colors=False,# options for cube animation
+                       **kwargs,# options for cube animation
                        ):
         tc_list = []
         # evaluate all the mutual information for every tuning curve during iterations
@@ -501,9 +500,8 @@ class TuningCurveOptimizer_Noncyclic:
             anim = TuningCurve_Noncyclic.animation_tc_list_cube(
                 tc_list, FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, interval = interval,
                 INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
-                INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR, 
-                weight_tol = weight_tol, weight_format = weight_format, 
-                cmap_name = cmap_name, shuffle_colors = shuffle_colors,
+                INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
+                **kwargs,
             )
         else:
             anim = TuningCurve_Noncyclic.animation_tc_list(
