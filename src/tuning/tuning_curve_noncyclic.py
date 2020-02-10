@@ -817,13 +817,13 @@ class TuningCurve_Noncyclic:
         
     @staticmethod 
     def animation_tc_list_cube(tc_list,
-			       INCLUDE_FUN= True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
-			       FILE_NAME="", ADD_TIME=True, interval=1000,
+                               INCLUDE_FUN= True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                               FILE_NAME="", ADD_TIME=True, interval=1000,
                                **kwargs,
-                               ):
-	'''
-	For details of the keyword arguments: see the doc of 'gen_mixed_anim' in 'anim_3dcube.py'.
-	'''
+                              ):
+        '''
+        For details of the keyword arguments: see the doc of 'gen_mixed_anim' in 'anim_3dcube.py'.
+        '''
         points_list = []
         weights_list = []
         info_list = []
