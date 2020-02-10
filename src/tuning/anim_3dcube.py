@@ -573,12 +573,7 @@ def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
     else:
         info_txt = None
 
-    if data_dimension == 1:
-        func_colors = ['steelblue']
-    elif data_dimension == 2:
-        func_colors = ['seagreen','steelblue']
-    else:
-        func_colors = ['crimson', 'seagreen', 'steelblue']
+    func_colors = ['steelblue', 'seagreen', 'crimson'][:data_dimension]
 
     # plot functions
     # Note: line labels are 'func_0', 'func_1', 'func_2' e.g. in 3-d.
