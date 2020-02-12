@@ -132,7 +132,7 @@ def poisson_bandit_iteration(input_set,
 
 # -----------SGD Algorithm-----------
 
-def simple_sgd(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, tau = 1.0, NUM_THREADS=1):
+def simple_sgd_poisson(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, tau = 1.0, NUM_THREADS=1):
     curve_list = []
     grad_list = []
     numBin = len(weight)
