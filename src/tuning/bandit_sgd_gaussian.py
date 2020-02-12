@@ -1,5 +1,5 @@
 import numpy as np
-from tuning.cyMINoncyclic import mc_mean_grad_noncyclic
+from tuning.cyMINoncyclic import mc_mean_grad_gaussian
 import matplotlib.pyplot as plt
 
 
