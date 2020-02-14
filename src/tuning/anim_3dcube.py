@@ -980,7 +980,10 @@ def gen_mixed_anim(points_list, weights_list=None, info_list=None,
     return anim
 
 # # example: real-time in matplotlib notebook.
-
+# import os, time
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from tuning.anim_3dcube import create_figure_canvas, set_data_in_figure
 # %matplotlib notebook
 
 # # tuning_list = [np.random.uniform(0.1, 1, (3,i+1)) for i in range(10)]
