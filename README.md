@@ -1,7 +1,7 @@
 # tuning
 Python scripts for tuning curve optimization according to Efficient Coding Hypotheses 
 
-Note: currently works for python 3.7.
+Note: currently only works for python 3.7 or above.
 
 ## Installation instructions
 
