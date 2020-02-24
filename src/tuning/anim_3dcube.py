@@ -69,6 +69,29 @@ def find_best_path(points_data):
 
     return best_path, best_path_len # length of closed curve
 
+def plot_funcs_in_figure(fig, points_data, weights, nrow=1, ncol=1, data_axis = 0, **kwargs):
+    '''In a given figure, plot tuning curves in subplots in grid (nrow, ncol).
+       Return the generated subplots' axes. Note: similar to set_func_data_in_axis_list;
+       especially suitable for high dimensional data (numNeuro>3).
+       When data_axis = 0 (default), plot the piecewise constant function of (points_data[i,:], weights) for each i;
+       When data_axis = 1, plot the values of points_data[:,j] for each j.
+       kwargs: same as in 'ax.plot' functions.
+    '''
+    numNeuro, numBin = points_data.shape
+    ax_list = []
+    if data_axis == 0:
+        for i in range(numNeuro):
+            xx, yy = pc_fun_weights(points_data[i,:], weights)
+            ax = fig.add_subplot(nrow, ncol, i+1)
+            ax.plot(xx, yy, **kwargs)
+            ax_list.append(ax)
+    else:
+        for i in range(numBin):
+            ax = fig.add_subplot(nrow, ncol, i+1)
+            ax.plot(points_data[:,i], **kwargs)
+            ax_list.append(ax)
+    return ax_list
+
 def draw_cube_in_axis(ax, radius, min_radius):
     '''Draw a cube in 3d axis with corrdinates: [min_radius, radius]^3.
     The plotted boundaries of the cube are labeled as 'boundary_0', ..., 'boundary_11'.
