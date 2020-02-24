@@ -2,6 +2,7 @@
 import time, sys, os, copy
 import numpy as np
 import matplotlib.pyplot as plt
+import mlrose
 
 from itertools import product, combinations
 from matplotlib.patches import FancyArrowPatch
