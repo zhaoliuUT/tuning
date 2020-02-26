@@ -38,3 +38,16 @@ def find_best_path(points_data, random_state = 0, use_coords = True):
     best_path, best_path_len = mlrose.genetic_alg(problem_fit, random_state = random_state)
 
     return best_path, best_path_len # length of closed curve
+
+
+def compute_path_len(points_data, path_vec, path_close = True):
+    def euclidean_distance(x,y):
+        return np.sqrt(np.sum((x-y)**2))
+
+    path_len = 0
+    for i in range(points_data.shape[1]-1):
+        path_len += euclidean_distance(points_data[:,path_vec[i]], points_data[:, path_vec[i+1]])
+    if path_close:
+        path_len += euclidean_distance(points_data[:,path_vec[-1]], points_data[:, path_vec[0]])
+
+    return path_len
