@@ -230,7 +230,7 @@ def gaussian_DKL_inhomo(bin_index, gaussian_samples, input_set, input_prob_vec, 
                                   input_set, input_prob_vec, inverse_cov_matrix, rho)
     return dkl/num_samples
 
-def gaussian_bandit_iteration_inhomo(input_set, inverse_cov_matrix, rho,
+def gaussian_bandit_iteration_inhomo(input_set, inverse_cov_matrix,
                               initial_prob_vec = None, max_iter = 1000, batch_size = 1, 
                               dkl_discount_factor = "decrease", epsilon=0,                               
                               update_rule = "additive",#"direct", "multiply"
@@ -253,6 +253,11 @@ def gaussian_bandit_iteration_inhomo(input_set, inverse_cov_matrix, rho,
         prob_vec = 1.0*np.ones(numBin)/numBin # initalize with equal weights
     else:
         prob_vec = initial_prob_vec.copy()
+
+    # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2)
+    rho = np.zeros(numBin)
+    for j in range(numBin):
+        rho[j] = np.sqrt(np.linalg.det(inverse_cov_matrix[:,:,j]))
 
     rewards = np.zeros(numBin)
     DKL_estimates = np.zeros(numBin)
