@@ -114,7 +114,7 @@ def gaussian_bandit_iteration(input_set, inverse_cov_matrix,
 
 # -----------SGD Algorithm-----------
 
-def simple_sgd_gaussian(tuning, weight, inv_cov_mat, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, tau = 1.0):
+def simple_sgd_gaussian(tuning, weight, inv_cov_mat, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, tau = 1.0, NUM_THREADS = 4):
     curve_list = []
     grad_list = []
     numBin = len(weight)
@@ -127,7 +127,7 @@ def simple_sgd_gaussian(tuning, weight, inv_cov_mat, eta, NUM_ITER, fp, fm, MC_I
     
     for i in range(NUM_ITER):
         x_grad *= 0
-        x_mean = mc_mean_grad_gaussian(x_grad, x, weight, inv_cov_mat, conv, tau, numIter=MC_ITER, my_num_threads=1)
+        x_mean = mc_mean_grad_gaussian(x_grad, x, weight, inv_cov_mat, conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
         x += eta*x_grad
         x[x>fp] = fp
         x[x<fm] = fm
