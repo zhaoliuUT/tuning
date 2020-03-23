@@ -259,7 +259,7 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
     for line in ax.lines:
         if line.get_label()=='path':
             path_line = line
-    if path_line is None:
+    if path_line is None and path_vec is not None:
         raise Exception('Wrong input: no path line is found in the ax.lines!')
 
     if data_dimension == 1 and path_vec is not None:
