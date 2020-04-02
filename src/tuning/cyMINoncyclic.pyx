@@ -789,8 +789,7 @@ def mc_coeff_arimoto_gaussian(double[:] coeff, double[:,:] tuning, double[:] wei
 # double[:,:,:] inv_cov_mat, add double[:] rho
 cdef double compute_mean_grad_s_gaussian_inhomo(
     int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,
-    double[:,:,:] inv_cov_mat, double[:] rho, double[:] response,
-    double[:,:,:] tmp_grad, double[:] quad) nogil: 
+    double[:,:,:] inv_cov_mat, double[:] rho, double[:] response, double[:] quad) nogil:
     # for a fixed s in range(numBin)(s is same as m in the notes)
     # rate: numNeuro*numBin
     # weight: numBin (sum up to 1)
@@ -799,7 +798,6 @@ cdef double compute_mean_grad_s_gaussian_inhomo(
     # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2), can be pre-computed
     # response: numNeuro (specific to s, gaussian distribution conditioning on s)
     
-    # tmp_grad: numBin*numNeuro*numBin, (will reuse in grad, so store for each s)
     # quad: numBin,  (specific to s)
        
 
@@ -816,18 +814,7 @@ cdef double compute_mean_grad_s_gaussian_inhomo(
     for l in range(numBin):
         mean_s += weight[l] * rho[l]/rho[s] * exp(-0.5*(quad[l] - quad[s]))
     mean_s = log(mean_s)
-    
-    for p in range(numNeuro):
-        for l in range(numBin):
-            diff = 0
-            for k in range(numNeuro):
-                diff += inv_cov_mat[p, k, l]*(response[k] - rate[k,l])
-            tmp_sum = 0
-            for j in range(numBin):
-                tmp_sum += weight[j]*rho[j]*exp(-0.5*(quad[j] - quad[l]))
-            
-            tmp_grad[s, p, l] += diff*weight[l]*rho[l]/tmp_sum
-        
+
     return mean_s
 
 
@@ -875,10 +862,6 @@ def mc_mean_grad_gaussian_inhomo(
     
     cdef double[:,:] quad_all = np.zeros((my_num_threads, numBin), dtype = np.float)   
 
-    # cdef double[:,:,:] tmp_grad = np.zeros((numBin, numNeuro,numBin),dtype = np.float)
-    cdef double[:,:,:,:] tmp_grad_all = np.zeros((my_num_threads, numBin, numNeuro,numBin),dtype = np.float)
-
-
     cdef double mean = 0 
     cdef double this_mean_s = 0  
     
@@ -910,12 +893,10 @@ def mc_mean_grad_gaussian_inhomo(
         for n_iter in prange(numIter):
             for s in range(numBin):
                 # samples conditioning on s: gaussian_samples[n_iter,:,s]
-                # tmp_grad_all[tid, s,:,:] is updated
-                
                 
                 this_mean_s = compute_mean_grad_s_gaussian_inhomo(
                     s, numBin, numNeuro, rate, weight, inv_cov_mat, rho,
-                    gaussian_samples[n_iter,:,s], tmp_grad_all[tid,:,:,:], quad_all[tid,:])
+                    gaussian_samples[n_iter,:,s], quad_all[tid,:])
                 
                 # compute negative mean entropy
                 mean += weight[s]*this_mean_s
@@ -932,13 +913,7 @@ def mc_mean_grad_gaussian_inhomo(
     cdef double tmp_grad_term = 0
     for p in range(numNeuro):
         for s in range(numBin):
-            # the 2nd term
-            for m in range(numBin): 
-                tmp_grad_term = 0
-                for k in range(my_num_threads):
-                    tmp_grad_term += tmp_grad_all[k, m,p, s]#tmp_grad[m, p,s] += tmp_grad_all[k, m,p, s]
-                    # tmp_grad[m,p,s] is sampled conditioning on m
-                grad[p,s] += weight[m]*tmp_grad_term #weight[m]*tmp_grad[m,p, s]
+            # the 2nd term is zero
             # the first term
             for k in range(my_num_threads):
                 grad[p,s] += grad_all[k,p,s] 
