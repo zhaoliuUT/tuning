@@ -269,7 +269,7 @@ def simple_sgd_gaussian_with_laplacian_2d(
         grad_list.append(x_grad.reshape((nNeuro, nBin1, nBin2)).copy())
     return curve_list, grad_list
 
-#------------Plotting function------------
+#=========Plotting functions=========
 
 def plot_info_alternate(ax, info_list, mark_list, index_list=None, color_sgd = 'r', color_bandit = 'b'):
     if index_list is None:

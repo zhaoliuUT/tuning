@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 # plot 2d piecewise constant functions and weights as 2d colormesh or 3d surfaces
 def plot_colormesh_in_axis(ax, f_values, weights, cmap = 'RdBu'):
