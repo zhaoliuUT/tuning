@@ -176,6 +176,99 @@ def simple_sgd_gaussian_with_laplacian(
 
     return curve_list, grad_list
 
+
+def simple_sgd_gaussian_with_laplacian_no_bc(
+    tuning, weight, inv_cov_mat, 
+    eta, NUM_ITER, fp, fm, MC_ITER = 1, 
+    add_laplacian = False, laplacian_coeff = 0, weighted_laplacian = False, # currently only 1d laplacian; 
+    # assume the points are already arranged in neighbours
+    conv = None, tau = 1.0, NUM_THREADS = 4
+):
+    '''No periodic boundary conditions'''
+    curve_list = []
+    grad_list = []
+
+    numBin = len(weight)
+    if conv is None:
+        conv = np.zeros(numBin)
+        conv[0] = 1
+        
+    x = tuning.copy()
+    x_grad = np.zeros_like(tuning)
+    
+#     if weighted_laplacian:
+#         laplacian_weights = weight
+#     else:
+#         laplacian_weights = np.ones(numBin)
+    
+    for i in range(NUM_ITER):
+        x_grad *= 0
+        x_mean = mc_mean_grad_gaussian(x_grad, x, weight, inv_cov_mat, conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
+        x += eta*x_grad
+        if add_laplacian:
+            laplacian_term = np.zeros_like(x)
+            for j in range(1, numBin-1):
+                laplacian_term[:, j] = x[:, j-1] + x[:, j+1] - 2*x[:, j]
+#                 laplacian_term[:, j] *= laplacian_weights[j]
+            x += laplacian_coeff * laplacian_term
+            
+        x[x>fp] = fp
+        x[x<fm] = fm
+        curve_list.append(x.copy())
+        grad_list.append(x_grad.copy())
+    return curve_list, grad_list
+
+def simple_sgd_gaussian_with_laplacian_2d(
+    tuning, weight, inv_cov_mat, 
+    eta, NUM_ITER, fp, fm, MC_ITER = 1, 
+    add_laplacian = False, laplacian_coeff = 0, weighted_laplacian = False, # currently only 1d laplacian; 
+    # assume the points are already arranged in neighbours
+    conv = None, tau = 1.0, NUM_THREADS = 4
+):
+    '''2-dimensional inputs: 
+    tuning shape: (numNeuro, numBin1, numBin2)
+    weight shape: (numBin1, numBin2)
+    periodic boundary condition on the 2d grid.
+    '''
+    curve_list = []
+    grad_list = []
+
+    nNeuro, nBin1, nBin2 = tuning.shape
+    if conv is None:
+        conv = np.zeros(nBin1*nBin2)
+        conv[0] = 1
+        
+    x = tuning.reshape((nNeuro, nBin1*nBin2)).copy()
+    x_grad = np.zeros((nNeuro, nBin1*nBin2))
+    
+#     if weighted_laplacian:
+#         laplacian_weights = weight
+#     else:
+#         laplacian_weights = np.ones(numBin)
+    
+    for i in range(NUM_ITER):
+        x_grad *= 0
+        x_mean = mc_mean_grad_gaussian(x_grad, x, weight.reshape(-1), 
+                                       inv_cov_mat, conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
+        x += eta*x_grad
+                
+        if add_laplacian:
+            xs = x.reshape((nNeuro, nBin1, nBin2))
+            laplacian_term = np.zeros((nNeuro, nBin1, nBin2))
+            for j1 in range(numBin1):
+                for j2 in range(numBin2):
+                    laplacian_term[:, j1, j2] = xs[:, (j1-1)%nBin1, j2] + xs[:, (j1+1)%numBin1, j2] \
+                    + xs[:,j1,(j2-1)%nBin2] + xs[:,j1,(j2+1)%nBin2]- 4*xs[:, j1, j2]
+#                 laplacian_term[:, j] *= laplacian_weights[j]
+            xs += laplacian_coeff * laplacian_term
+            x = xs.reshape((nNeuro, nBin1*nBin2))
+            
+        x[x>fp] = fp
+        x[x<fm] = fm
+        curve_list.append(x.reshape((nNeuro, nBin1, nBin2)).copy())
+        grad_list.append(x_grad.reshape((nNeuro, nBin1, nBin2)).copy())
+    return curve_list, grad_list
+
 #------------Plotting function------------
 
 def plot_info_alternate(ax, info_list, mark_list, index_list=None, color_sgd = 'r', color_bandit = 'b'):
