@@ -137,6 +137,26 @@ def plot_colormesh_in_axis_non_product(ax, f_values, weights, cmap = 'RdBu'):
     # fig.colorbar(colormesh, ax=ax)
     return colormesh
 
+##----------------examples of product and nonproduct cases--------
+# weight1 = np.array([0.1, 0.2, 0.3, 0.4])
+# weight2 = np.array([0.2, 0.3, 0.5])
+# weights = np.outer(weight1, weight2)
+# f_values = weights*2
+# fig, ax = plt.subplots()
+# colormesh = plot_colormesh_in_axis_non_product(ax, f_values, weights)
+# fig.colorbar(colormesh, ax=ax) # correct values of areas
+# from mpl_toolkits.mplot3d import Axes3D, proj3d
+# fig = plt.figure()
+# ax = fig.gca(projection='3d')
+# _ = plot_surfaces_in_axis(ax, f_values, weights)
+
+# weights = np.array([[0.1, 0.3], [0.3, 0.1], [0.05, 0.15]])
+# f_values = weights*2
+# fig, ax = plt.subplots()
+# colormesh = plot_colormesh_in_axis_non_product(ax, f_values, weights)
+# fig.colorbar(colormesh, ax=ax) # correct values of areas
+
+
 def get_color_array_2d_periodic(num_pts1, num_pts2, cmap_name = 'coolwarm', num_pts_color_range = None):
     '''
     Return a color array of shape (num_pts1*num_pts2, 4), with 2d periodic boundary.
