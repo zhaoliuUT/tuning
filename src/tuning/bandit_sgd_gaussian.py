@@ -255,8 +255,8 @@ def simple_sgd_gaussian_with_laplacian_2d(
         if add_laplacian:
             xs = x.reshape((nNeuro, nBin1, nBin2))
             laplacian_term = np.zeros((nNeuro, nBin1, nBin2))
-            for j1 in range(numBin1):
-                for j2 in range(numBin2):
+            for j1 in range(nBin1):
+                for j2 in range(nBin2):
                     laplacian_term[:, j1, j2] = xs[:, (j1-1)%nBin1, j2] + xs[:, (j1+1)%numBin1, j2] \
                     + xs[:,j1,(j2-1)%nBin2] + xs[:,j1,(j2+1)%nBin2]- 4*xs[:, j1, j2]
 #                 laplacian_term[:, j] *= laplacian_weights[j]
