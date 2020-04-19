@@ -21,11 +21,13 @@ def gen_binary_hierachical_curves(numNeuro, fp = 1, fm = 0):
         y[1:, :old_len]= x_.copy()
         y[1:, old_len:]= np.flip(x_, axis = 1)
         x_ = y.copy()
-        
-    corners = x_.copy()
-    corners[x_ == 0] = fm
-    corners[x_ == 1] = fp    
-    return corners
+    if fp != 1 or fm != 0:
+        xnew = np.zeros_like(x_).astype(float)
+        xnew[x_ == 0] = fm
+        xnew[x_ == 1] = fp
+        return xnew
+    else:
+        return x_
 
 ## example:
 # tc = gen_binary_hierachical_curves(5, fp = 1, fm = 0.01)
