@@ -94,10 +94,11 @@ def compute_period(yy, noise_tol = 0.15, period_tol = 0.6):
 
 
 
-def find_unique_points(points_data, tol = 1e-3):
+def find_unique_points(points_data, tol = 1e-3, return_index = False):
     #     points_data: (numDimension, numPoints)
     # each column is a point
     # return value has dimension (numDimension, smaller number of points)
+    # for the return index: points_data[:, returnedindex] == result.
     point_dim, point_num = points_data.shape
 
     if point_dim == 1:
@@ -106,7 +107,11 @@ def find_unique_points(points_data, tol = 1e-3):
         xx = points_data[ind]
         xxdiff = np.append(1, np.diff(xx))
         result = xx[xxdiff > tol]
-        return result.reshape(1, len(result))
+        result = result.reshape(1, len(result))
+        if return_index:
+            return result, ind[xxdiff>tol]
+        else:
+            return result
 
     xx = points_data.T
     sort_keys = (xx[:,0], xx[:,1])
@@ -116,4 +121,56 @@ def find_unique_points(points_data, tol = 1e-3):
     xx = xx[ind, :]
     xxdiff = np.diff(xx, axis = 0)
     errors = np.append(1, np.sum(xxdiff**2, axis = 1))
-    return xx[errors>tol, :].T
+    result = xx[errors>tol, :].T
+    if return_index:
+        return result, ind[errors > tol]
+    else:
+        return result
+
+def find_unique_points_weights(points_data, points_weights=None, tol = 1e-3, return_index = False):
+    #     points_data: (numDimension, numPoints)
+    # each column is a point
+    # return value has dimension (numDimension, smaller number of points)
+    # for the return index: points_data[:, returnedindex] == result.
+    # also sum up the weights according to the unique indices
+    point_dim, point_num = points_data.shape
+
+    if point_dim == 1:
+        points_data = points_data.reshape(-1)
+        ind = np.argsort(points_data)
+        xx = points_data[ind]
+        errors = np.append(1, np.diff(xx))
+        result = xx[errors > tol]
+        result = result.reshape(1, len(result))
+    else:
+        xx = points_data.T
+        sort_keys = (xx[:,0], xx[:,1])
+        for k in range(2, point_dim):
+            sort_keys = (*sort_keys, xx[:,k])
+        ind = np.lexsort(sort_keys) # sort using multiple keys
+        xx = xx[ind, :]
+        xxdiff = np.diff(xx, axis = 0)
+        errors = np.append(1, np.sum(xxdiff**2, axis = 1))
+        result = xx[errors>tol, :].T
+
+    if points_weights is not None:
+        # sum up the weights according to the unique indices
+        newweights = np.zeros(result.shape[1])
+
+        errors_ind = np.where(errors > tol)[0]
+        for j, start_idx in enumerate(errors_ind[:-1]):
+            #start_idx = errors_ind[j]
+            end_idx = errors_ind[j+1]
+            newweights[j] = np.sum(points_weights[ind[start_idx:end_idx]])
+        newweights[-1] = np.sum(points_weights[ind[errors_ind[-1]:]])
+    # return results
+    if points_weights is None:
+        if return_index:
+            return result, ind[errors > tol]
+        else:
+            return result
+    else:
+        if return_index:
+            return result, newweights, ind[errors > tol]
+        else:
+            return result, newweights
