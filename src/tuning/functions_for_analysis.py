@@ -90,3 +90,30 @@ def compute_period(yy, noise_tol = 0.15, period_tol = 0.6):
     else:
         print('different number of increasing intervals and decreasing intervals: %d and %d!'%(increase_num, decrease_num))
         return max(increase_num, decrease_num)
+
+
+
+
+def find_unique_points(points_data, tol = 1e-3):
+    #     points_data: (numDimension, numPoints)
+    # each column is a point
+    # return value has dimension (numDimension, smaller number of points)
+    point_dim, point_num = points_data.shape
+
+    if point_dim == 1:
+        points_data = points_data.reshape(-1)
+        ind = np.argsort(points_data)
+        xx = points_data[ind]
+        xxdiff = np.append(1, np.diff(xx))
+        result = xx[xxdiff > tol]
+        return result.reshape(1, len(result))
+
+    xx = points_data.T
+    sort_keys = (xx[:,0], xx[:,1])
+    for k in range(2, point_dim):
+        sort_keys = (*sort_keys, xx[:,k])
+    ind = np.lexsort(sort_keys) # sort using multiple keys
+    xx = xx[ind, :]
+    xxdiff = np.diff(xx, axis = 0)
+    errors = np.append(1, np.sum(xxdiff**2, axis = 1))
+    return xx[errors>tol, :].T
