@@ -27,7 +27,7 @@ tc = gen_binary_hierachical_curves(numNeuro, fp = 0.8, fm = -0.8)
 
 numBin = 1024 #32*32
 tuning = np.zeros((numNeuro, numBin))
-num_pts = numBin/tc.shape[1]
+num_pts = int(numBin/tc.shape[1])
 vec = np.linspace(0, 1, num_pts + 1)[:num_pts]
 for k in range(tc.shape[1]):
     tuning[:, k*num_pts:(k+1)*num_pts] = tc[:, k][:, None] + vec*(tc[:,(k+1)%tc.shape[1]] - tc[:, k])[:, None]

@@ -64,7 +64,7 @@ def tuning_update_inhomo(tuning, weight, sigma_vec, alpha = 2, eta = 1, beta = 0
         revdiffx =-np.roll(diffx, 1, axis = 1) # x[k-1]_i - x[k]_i
         
         diffS = np.sqrt(np.sum(diffx**2, axis = 0)) # sum diffx[i,k]**2 from i=1 to nNeuro
-        revdiffS = np.roll(diffS2, 1)
+        revdiffS = np.roll(diffS, 1)
         
         if elastic_term == 'sum':
             diffpow = diffS**(alpha-2)
