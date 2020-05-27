@@ -265,6 +265,108 @@ def evaluate_elastic_term_periodic(tuning, weight, alpha = 2, beta = 0, elastic_
     return elastic_value*beta
 
 
+def tuning_update_poisson(tuning, weight, alpha = 2, eta = 1, beta = 0, Lambda = 1,
+                          elastic_term = 'sum',# other options: 'exp', 'expweight', 'rand'
+                          elastic_term_periodic = True, # use closed curve
+                          upper_bound = 1, lower_bound = 0.01):
+    '''Pseudo-Poisson Model (gaussian with variance=function value), no periodic boundary condition
+    '''
+    # tuning.shape = (numNeuro, numBin)
+    # weight: vector, sum =1, length = numBin
+    # Lambda: number, std for the laplacian term
+    # eta: number, coefficient of the repulsive term
+    # alpha: number, exponent of \|x_k - x_l\| in the probability distribution
+    # beta: number, coefficient of the laplacian term
+    nNeuro, nBin = tuning.shape
+    dS = np.zeros((nBin, nBin))
+    for i in range(nNeuro):
+        dX = tuning[i,:][None, :] - tuning[i,:][:, None] # dX[k, l]=tuning[i, l]-tuning[i, k]
+        dS += dX**2/tuning[i,:][None, :] # (tuning[i, l]-tuning[i, k])^2/tuning[i, l]
+    dS = np.sqrt(dS)
+    
+    P = np.exp(-0.5*dS**alpha)
+    P_constants = np.prod(tuning, axis = 0)**(0.5*alpha) # product of tuning[i,l] over all i
+    P /= P_constants[None, :] # P[k,l] = P[k,l]/constants[l]    
+    
+    # negative derivatives
+    u = np.zeros((nNeuro, nBin))
+    F = dS**(alpha-2)*P
+    F2 = (dS.T)**(alpha-2)*P.T
+
+    for i in range(nNeuro):
+        xi = tuning[i,:]
+        dX = xi[None, :] - xi[:, None] # dX[k, l]=tuning[i, l]-tuning[i, k]
+        temp = dX*F/xi[None,:] + dX*F2/xi[:,None] #dX[k,l]*F[k,l]/tuning[i,l]+dX[k,l]*F2[k,l]/tuning[i,k]
+        temp += P/xi[None,:] # P[k,l]/tuning[i,l]
+        temp -= 0.5*F*(dX**2)/(xi[None,:]**2) # 0.5*F[k,l]*dX[k,l]**2/(tuning[i,l]**2)
+        
+        u[i,:] = np.sum(weight[:,None]*temp, axis = 0)
+        
+        # inside the sum:
+        # [k,l] = weight[k]*temp[k,l]
+        # sum over k for fixed l
+        
+    u = weight*alpha*0.5*u # u[i,k] = weight[k]*u[i,k]*alpha*0.5
+ 
+    # positive derivatives of the elastic term
+    dl = np.zeros((nNeuro, nBin))
+    
+    if beta != 0:
+        
+        diffx = np.zeros((nNeuro, nBin))        
+        diffx[:, 0:-1] = np.diff(tuning, axis = 1) # x[k+1]_i - x[k]_i
+        if elastic_term_periodic:
+            diffx[:, -1] = tuning[:, 0] - tuning[:, -1]
+            
+        revdiffx =-np.roll(diffx, 1, axis = 1) # x[k-1]_i - x[k]_i
+        
+        diffS = np.sqrt(np.sum(diffx**2, axis = 0)) # sum diffx[i,k]**2 from i=1 to nNeuro
+        revdiffS = np.roll(diffS, 1)
+        
+        if elastic_term == 'sum':
+            diffpow = diffS**(alpha-2)
+            revdiffpow = revdiffS**(alpha-2)
+            dl = diffx*diffpow + revdiffx*revdiffpow
+            dl *= 0.5*alpha
+        elif elastic_term == 'exp':
+            expdiffpow = (diffS**(alpha-2))*np.exp(-diffS**alpha/(2*Lambda**alpha))
+            exprevdiffpow = (revdiffS**(alpha-2))*np.exp(-revdiffS**alpha/(2*Lambda**alpha))
+            dl = diffx*expdiffpow + revdiffx*exprevdiffpow
+            dl *= 0.5*alpha/Lambda**3
+        elif elastic_term == 'expweight':
+            expdiffpow = (diffS**(alpha-2))*np.exp(-diffS**alpha/(2*Lambda**alpha))
+            exprevdiffpow = (revdiffS**(alpha-2))*np.exp(-revdiffS**alpha/(2*Lambda**alpha))
+            dl = weight*np.roll(weight,-1)*diffx*expdiffpow + \
+            weight*np.roll(weight,1)*revdiffx*exprevdiffpow
+            dl *= 0.5*alpha/Lambda**3
+        elif elastic_term == 'rand':
+            dl = np.random.randn((nNeuro, nBin))
+           
+        if elastic_term in ['sum', 'exp', 'expweight'] and (not elastic_term_periodic):
+            dl[:,0] = 2*dl[:,0]
+            dl[:, -1] = 2*dl[:, -1]
+
+    tuningnew = tuning + eta*u + beta*dl
+
+    tuningnew[tuningnew > upper_bound] = upper_bound
+    tuningnew[tuningnew < lower_bound] = lower_bound   
+    
+    return tuningnew
+
+def conditional_probability_matrix_poisson(tuning, alpha = 2):
+    nNeuro, nBin = tuning.shape
+    dS = np.zeros((nBin, nBin))
+    for i in range(nNeuro):
+        dX = tuning[i,:][None, :] - tuning[i,:][:, None] # dX[k, l]=tuning[i, l]-tuning[i, k]
+        dS += dX**2/tuning[i,:][None, :] # (tuning[i, l]-tuning[i, k])^2/tuning[i, l]
+    dS = np.sqrt(dS)
+    
+    P = np.exp(-0.5*dS**alpha)
+    P_constants = np.prod(tuning, axis = 0)**(0.5*alpha) # product of tuning[i,l] over all i
+    P /= P_constants[None, :] # P[k,l] = P[k,l]/constants[l]    
+    return P
+
+
 def mutual_distance(tuning):
     nNeuro, nBin = tuning.shape
     dS = np.zeros((nBin, nBin))
