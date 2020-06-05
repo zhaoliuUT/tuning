@@ -351,3 +351,22 @@ np.save(FILE_NAME, res_dict)
 #     plt.show()
 #     plt.savefig(FILE_NAME+'_points.jpg')
 
+## ------clustering------
+
+# from sklearn.cluster import KMeans
+
+# num_clusters = 100
+# kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(tuning.T)
+# # kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(tuning_list[1000].T)
+
+# tuning_new = kmeans.cluster_centers_.T
+
+# weight_new = np.zeros(num_clusters)
+# for i in range(num_clusters):
+#     weight_new[i] = np.sum(weight[kmeans.labels_ == i])
+# print(weight_new)
+# print(np.sum(weight_new))
+
+# fig = plt.figure()
+# _ = plot_funcs_in_figure(fig, tuning_new, weight_new, ncol = 1, nrow = numNeuro, fp = 1, fm = 0)
+
