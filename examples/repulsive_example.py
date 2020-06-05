@@ -119,6 +119,7 @@ elastic_term = 'exp'
 Lambda = 0.2
 
 ALTER_WEIGHT = T+1
+WEIGHT_ITER_NUM = 10
 
 EVALUATE_OPT = True
 EVALUATE_EL = True
