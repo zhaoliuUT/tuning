@@ -64,7 +64,7 @@ https://jupyter.readthedocs.io/en/latest/install.html
  
 ### Step 2. Clone the repository locally
 
-In your terminal, use ```git init``` to create a new git repository. Then clone this remote repository to your local:
+In your terminal, in a directory of your choice, use ```git init``` to create a new git repository. Then clone this remote repository to your local:
 
 ```git clone https://github.com/zhaoliuUT/tuning.git```
 
