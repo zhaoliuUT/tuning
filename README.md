@@ -62,8 +62,19 @@ Note: currently only works for python 3.7 or above.
 - For convenience of visualization, Jupiter Notebook is also recommended: 
 https://jupyter.readthedocs.io/en/latest/install.html
  
+### Step 2. Clone the repository locally
 
-### Step 2. In the directory of the codes, install the package:
+In your terminal, use ```git init``` to create a local repository, and clone the repository:
+
+```git clone https://github.com/zhaoliuUT/tuning.git```
+
+Alternatively, you can download the zip file of the repository at the top of the main page of the repository.
+
+Reference: https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository
+
+### Step 3. Install the package locally
+
+Run in your lcoal directory
 
 ```python setup.py install```
 
@@ -93,7 +104,7 @@ Solution on Mac Os:
 	Reference: https://stackoverflow.com/questions/36211018/clang-error-errorunsupported-option-fopenmp-on-mac-osx-el-capitan-buildin
 
 
-### Step 3. Try to run example.py :
+### Step 4. Try to run example.py :
 
 ```python examples/example.py```
 
