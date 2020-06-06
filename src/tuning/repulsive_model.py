@@ -285,7 +285,7 @@ def tuning_update_poisson(tuning, weight, alpha = 2, eta = 1, beta = 0, Lambda =
     dS = np.sqrt(dS)
     
     P = np.exp(-0.5*dS**alpha)
-    P_constants = np.prod(tuning, axis = 0)**(0.5*alpha) # product of tuning[i,l] over all i
+    P_constants = np.prod(tuning, axis = 0) # product of tuning[i,l] over all i
     P /= P_constants[None, :] # P[k,l] = P[k,l]/constants[l]    
     
     # negative derivatives
@@ -297,7 +297,7 @@ def tuning_update_poisson(tuning, weight, alpha = 2, eta = 1, beta = 0, Lambda =
         xi = tuning[i,:]
         dX = xi[None, :] - xi[:, None] # dX[k, l]=tuning[i, l]-tuning[i, k]
         temp = dX*F/xi[None,:] + dX*F2/xi[:,None] #dX[k,l]*F[k,l]/tuning[i,l]+dX[k,l]*F2[k,l]/tuning[i,k]
-        temp += P/xi[None,:] # P[k,l]/tuning[i,l]
+        temp += 2.0/alpha*P/xi[None,:] # P[k,l]/tuning[i,l] term
         temp -= 0.5*F*(dX**2)/(xi[None,:]**2) # 0.5*F[k,l]*dX[k,l]**2/(tuning[i,l]**2)
         
         u[i,:] = np.sum(weight[:,None]*temp, axis = 0)
@@ -349,9 +349,10 @@ def tuning_update_poisson(tuning, weight, alpha = 2, eta = 1, beta = 0, Lambda =
     tuningnew = tuning + eta*u + beta*dl
 
     tuningnew[tuningnew > upper_bound] = upper_bound
-    tuningnew[tuningnew < lower_bound] = lower_bound   
+    tuningnew[tuningnew < lower_bound] = lower_bound
     
     return tuningnew
+
 
 def conditional_probability_matrix_poisson(tuning, alpha = 2):
     nNeuro, nBin = tuning.shape
@@ -362,7 +363,7 @@ def conditional_probability_matrix_poisson(tuning, alpha = 2):
     dS = np.sqrt(dS)
     
     P = np.exp(-0.5*dS**alpha)
-    P_constants = np.prod(tuning, axis = 0)**(0.5*alpha) # product of tuning[i,l] over all i
+    P_constants = np.prod(tuning, axis = 0) # product of tuning[i,l] over all i
     P /= P_constants[None, :] # P[k,l] = P[k,l]/constants[l]    
     return P
 
