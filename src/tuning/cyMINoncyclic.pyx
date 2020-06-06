@@ -96,11 +96,7 @@ cdef double compute_prod_grad_noncyclic(int numBin, int numNeuro, double[:,:] ra
     for k in range(numNeuro):
         for l in range(numBin):
             tmp_grad_kl = weight[l]*prod_p[l]*log_prod_s[l] if prod_p[l] else 0
-            #grad[k,l] = weight[l]*prod_p[l]*log(prod_s[l])
-            for j in range(numBin):
-                tmp_grad_kl += weight[j]*prod_p[j]*weight[l]/exp(log_prod_s[l]) if prod_p[j] else 0
-                #grad[k,l] += weight[j]*prod_p[j]*weight[l]/prod_s[l]
-            #grad[k,l] *= (1 - count[k]/rate[k,l]) if rate[k,l] else 1
+            # the second term is zero
             grad[k,l] += (1 - count[k]/rate[k,l])*tmp_grad_kl if rate[k,l] else tmp_grad_kl
          
     return info
@@ -166,18 +162,16 @@ def partial_sum_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, dou
             
     return info
 
-
 # ----------Compute info and grad by Monte Carlo--------
 
-cdef double compute_mean_grad_s_noncyclic(int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,int[:] count,\
-                         double[:,:,:] tmp_grad, double[:,:] lrate, double[:] mexp, double[:] dexp) nogil: 
+cdef double compute_mean_grad_s_noncyclic(
+    int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,int[:] count,
+    double[:,:] lrate, double[:] mexp, double[:] dexp) nogil: 
     # for a fixed s in range(numBin)(s is same as m in the notes)
     # rate: numNeuro*numBin
     # weight: numBin (sum up to 1)
     # count: numNeuro (specific to s, Poisson distribution conditioning on s)
     
-    
-    # tmp_grad: numBin*numNeuro*numBin, (will reuse in grad, so store for each s)
     # mexp: numBin,  (specific to s)
     # lrate: numNeuro*numBin,  (specific to s)
     # dexp: numBin (specific to s)
@@ -217,16 +211,12 @@ cdef double compute_mean_grad_s_noncyclic(int s, int numBin, int numNeuro, doubl
         tmp_sum_s += weight[l]*mexp[l]
     mean_s = mymax + log(tmp_sum_s)
     
-    for p in range(numNeuro):
-        for i in range(numBin):
-            tmp_grad[s, p, i] += (count[p]/rate[p,i] - 1)*weight[i]*mexp[i]/tmp_sum_s if rate[p,i] else (-weight[i]*mexp[i]/tmp_sum_s)
-        
     return mean_s
 
 #@cython.boundscheck(False)
 #@cython.cdivision(True)
-cdef void update_grad_s_noncyclic(int s, double[:,:] grad, int numBin, int numNeuro, double[:,:] rate, double[:] weight, \
-                        int[:] count, double mean_s) nogil:
+cdef void update_grad_s_noncyclic(int s, double[:,:] grad, int numBin, int numNeuro, double[:,:] rate,\
+                                  double[:] weight, int[:] count, double mean_s) nogil:
     # s is now i in the notes..
     # count is sampled conditioning on s
     # derivative of the probability density term
@@ -239,7 +229,7 @@ cdef void update_grad_s_noncyclic(int s, double[:,:] grad, int numBin, int numNe
 
 # compute I and grad(I).
 def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] weight,\
-                     double[:] conv, double tau, int numIter, int my_num_threads = 4):
+                           double[:] conv, double tau, int numIter, int my_num_threads = 4):
     # conv is old stim...
     # tuing: numNeuro*numBin
     # MI_grad: numNeuro*numBin
@@ -260,10 +250,6 @@ def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] we
     cdef double[:,:] mexp_all = np.zeros((my_num_threads, numBin), dtype = np.float)   
     cdef double[:,:,:] lrate_all = np.zeros((my_num_threads, numNeuro,numBin),dtype = np.float)
     
-    # cdef double[:,:,:] tmp_grad = np.zeros((numBin, numNeuro,numBin),dtype = np.float)
-    cdef double[:,:,:,:] tmp_grad_all = np.zeros((my_num_threads, numBin, numNeuro,numBin),dtype = np.float)
-
-
     cdef double mean = 0 
     cdef double this_mean_s = 0  
     
@@ -291,9 +277,9 @@ def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] we
             for s in range(numBin):
                 # samples conditioning on s: poisson_samples[n_iter,:,s]
                 # tmp_grad_all[tid, s,:,:] is updated
-                this_mean_s = compute_mean_grad_s_noncyclic(s, numBin, numNeuro, rate, weight,\
-                                             poisson_samples[n_iter,:,s],tmp_grad_all[tid,:,:,:],\
-                                         lrate_all[tid,:,:], mexp_all[tid,:], dexp_all[tid,:])
+                this_mean_s = compute_mean_grad_s_noncyclic(
+                    s, numBin, numNeuro, rate, weight, poisson_samples[n_iter,:,s],\
+                    lrate_all[tid,:,:], mexp_all[tid,:], dexp_all[tid,:])
                 
                 # compute negative mean entropy
                 mean += weight[s]*this_mean_s
@@ -306,16 +292,9 @@ def mc_mean_grad_noncyclic(double[:,:] MI_grad, double[:,:] tuning, double[:] we
     
     # compute the rate gradient
     
-    cdef double tmp_grad_term = 0
     for p in range(numNeuro):
         for s in range(numBin):
-            # the 2nd term
-            for m in range(numBin): 
-                tmp_grad_term = 0
-                for k in range(my_num_threads):
-                    tmp_grad_term += tmp_grad_all[k, m,p, s]#tmp_grad[m, p,s] += tmp_grad_all[k, m,p, s]
-                    # tmp_grad[m,p,s] is sampled conditioning on m
-                grad[p,s] += weight[m]*tmp_grad_term #weight[m]*tmp_grad[m,p, s]
+            # the 2nd term is zero
             # the first term
             for k in range(my_num_threads):
                 grad[p,s] += grad_all[k,p,s] 
