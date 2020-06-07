@@ -2,6 +2,7 @@
 
 import numpy as np
 import time, sys, os, copy
+import matplotlib
 import matplotlib.pyplot as plt
 import itertools
 
