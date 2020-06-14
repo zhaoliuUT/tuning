@@ -83,7 +83,7 @@ def tuning_update_inhomo(tuning, weight, sigma_vec, alpha = 2, eta = 1, beta = 0
             weight*np.roll(weight,1)*revdiffx*exprevdiffpow
             dl *= 0.5*alpha/Lambda**3
         elif elastic_term == 'rand':
-            dl = np.random.randn((nNeuro, nBin))
+            dl = np.random.randn(nNeuro, nBin)
            
         if elastic_term in ['sum', 'exp', 'expweight'] and (not elastic_term_periodic):
             dl[:,0] = 2*dl[:,0]
@@ -340,7 +340,7 @@ def tuning_update_poisson(tuning, weight, alpha = 2, eta = 1, beta = 0, Lambda =
             weight*np.roll(weight,1)*revdiffx*exprevdiffpow
             dl *= 0.5*alpha/Lambda**3
         elif elastic_term == 'rand':
-            dl = np.random.randn((nNeuro, nBin))
+            dl = np.random.randn(nNeuro, nBin)
            
         if elastic_term in ['sum', 'exp', 'expweight'] and (not elastic_term_periodic):
             dl[:,0] = 2*dl[:,0]
