@@ -132,7 +132,10 @@ def poisson_bandit_iteration(input_set,
 
 # -----------SGD Algorithm-----------
 
-def simple_sgd_poisson(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv = None, tau = 1.0, NUM_THREADS=1):
+def simple_sgd_poisson(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, 
+                       add_laplacian = False, laplacian_coeff = 0, #weighted_laplacian = False, # currently only 1d laplacian;
+    # assume the points are already arranged in neighbours
+                       conv = None, tau = 1.0, NUM_THREADS=1):
     curve_list = []
     grad_list = []
     numBin = len(weight)
@@ -143,15 +146,26 @@ def simple_sgd_poisson(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv 
     x = tuning.copy()
     x_grad = np.zeros_like(tuning)
     
+    #     if weighted_laplacian:
+#         laplacian_weights = weight
+#     else:
+#         laplacian_weights = np.ones(numBin)
+
     for i in range(NUM_ITER):
         x_grad *= 0
         x_mean = mc_mean_grad_noncyclic(x_grad, x, weight, conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
         x += eta*x_grad
+        if add_laplacian:
+            laplacian_term = np.zeros_like(x)
+            for j in range(numBin):
+                laplacian_term[:, j] = x[:, (j-1)%numBin] + x[:, (j+1)%numBin] - 2*x[:, j]
+                #laplacian_term[:, j] *= laplacian_weights[j]
+            x += laplacian_coeff * laplacian_term
+
         x[x>fp] = fp
         x[x<fm] = fm
         curve_list.append(x.copy())
         grad_list.append(x_grad.copy())
         
     return curve_list, grad_list
-
 
