@@ -1018,3 +1018,265 @@ def mc_coeff_arimoto_gaussian_inhomo(
         for p in range(numNeuro):
             coeff[m] *= exp(-slope[p]*tuning[p,m])
     return
+
+#------------------------------------------------------------------------
+#---Simplified inhomogeneous cases for Gaussian Model, No correlations---
+#------------------------------------------------------------------------
+
+# double[:,:] inv_cov_diag, add double[:] rho
+cdef double compute_mean_grad_s_gaussian_inhomo_no_corr(
+    int s, int numBin, int numNeuro, double[:,:] rate, double[:] weight,
+    double[:,:] inv_cov_diag, double[:] rho, double[:] response, double[:] quad) nogil:
+    # for a fixed s in range(numBin)(s is same as m in the notes)
+    # rate: numNeuro*numBin
+    # weight: numBin (sum up to 1)
+    # inv_cov_diag: numNeuro*numBin, 
+    # inv_cov_diag[:,j] contains the diagonal entries of the inverse covariance matrix of p(r|theta_j)    
+    # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2), can be pre-computed
+    # e.g. inv_cov_diag[:, j] = [1/f_{0,j}, ..., 1/f_{numNeuro-1, j}] for pseudo-Poissonian model,
+    #      rho[j] = (product of 1/f_{0,j}, ..., 1/f_{numNeuro-1, j})^{1/2}
+    # response: numNeuro (specific to s, gaussian distribution conditioning on s)
+    
+    # quad: numBin,  (specific to s)
+       
+
+    cdef int i,j,k,l, p #, indj, indk
+    cdef double mean_s, tmp_sum, diff     #mymax
+
+    for l in range(numBin):
+        quad[l] = 0
+        for j in range(numNeuro):
+            quad[l] += inv_cov_diag[j,l]*(response[j] - rate[j,l])**2
+
+    mean_s = 0
+    for l in range(numBin):
+        mean_s += weight[l] * rho[l]/rho[s] * exp(-0.5*(quad[l] - quad[s]))
+    mean_s = log(mean_s)
+
+    return mean_s
+
+
+#@cython.boundscheck(False)
+#@cython.cdivision(True)
+cdef void update_grad_s_gaussian_inhomo_no_corr(
+    int s, double[:,:] grad, int numBin, int numNeuro,
+    double[:,:] rate, double[:] weight, double[:,:] inv_cov_diag,
+    double[:] response, double mean_s) nogil:
+    # s is now i in the notes..
+    # response is sampled conditioning on s
+    # derivative of the probability density term
+    cdef int p
+    cdef double diff_p_s
+    
+    for p in range(numNeuro):
+        diff_p_s = inv_cov_diag[p,s]*(response[p] - rate[p,s])
+        grad[p, s] += weight[s]*diff_p_s*mean_s
+
+
+# compute I and grad(I).
+def mc_mean_grad_gaussian_inhomo_no_corr(
+    double[:,:] MI_grad, double[:,:] tuning, double[:] weight,
+    double[:,:] inv_cov_diag,
+    double[:] conv, double tau, int numIter, int my_num_threads = 4):
+    # conv is old stim...
+    # tuing: numNeuro*numBin
+    # MI_grad: numNeuro*numBin
+    # weight: numBin, sum up to one
+    # inv_cov_diag: numNeuro*numBin, where inv_cov_diag[:,j] contains 
+    #               the diagonal entries of the inverse covariance matrix of p(r|theta_j)
+    #               e.g. inv_cov_diag[:, j] = [1/f_{0,j}, ..., 1/f_{numNeuro-1, j}] 
+    #               for pseudo-Poissonian model
+    # conv: numBin, weighted sum is one.
+    # 
+    cdef int numNeuro = tuning.shape[0] # or cdef int numNeuro
+    cdef int numBin = tuning.shape[1] # or cdef int numBin
+   
+    cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef Py_ssize_t i,j,l,k,m,p,s
+    cdef Py_ssize_t n_iter
+
+    cdef double[:,:] grad = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef double[:,:,:] grad_all = np.zeros((my_num_threads, numNeuro, numBin), dtype = np.float) 
+    
+    cdef double[:,:] quad_all = np.zeros((my_num_threads, numBin), dtype = np.float)   
+
+    cdef double mean = 0 
+    cdef double this_mean_s = 0
+    
+    for p in range(numNeuro):
+        for j in range(numBin):
+            for l in range(numBin):
+                rate[p,j] += tuning[p, (numBin+j-l) % numBin]*conv[l]
+            rate[p,j] *= tau
+    
+    # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2)
+    cdef double[:] rho = np.sqrt(np.prod(inv_cov_diag, axis = 0)) #np.zeros(numBin, dtype = np.float)
+    #for j in range(numBin):
+    #    rho[j] = np.sqrt(np.linalg.det(inv_cov_mat[:,:,j]))
+            
+    # generate Gaussian samples for all s = 1,...,numBin(different s, different samples)
+    #     np.random.seed(305)
+        
+    gaussian_samples_np = np.zeros((numIter, numNeuro,numBin), dtype = np.float)
+    for s in range(numBin):
+        cov_mat = np.diag(np.ones(numNeuro)/inv_cov_diag[:, s])# np.linalg.inv(inv_cov_mat[:,:,s])
+        gaussian_samples_np[:,:,s] = np.random.multivariate_normal(rate[:,s], cov_mat, size = numIter)
+                
+    cdef double[:,:,:] gaussian_samples = gaussian_samples_np
+        
+    cdef int tid
+
+    with nogil, parallel(num_threads = my_num_threads):
+        tid = threadid()
+        for n_iter in prange(numIter):
+            for s in range(numBin):
+                # samples conditioning on s: gaussian_samples[n_iter,:,s]
+                
+                this_mean_s = compute_mean_grad_s_gaussian_inhomo_no_corr(
+                    s, numBin, numNeuro, rate, weight, inv_cov_diag, rho,
+                    gaussian_samples[n_iter,:,s], quad_all[tid,:])
+                
+                # compute negative mean entropy
+                mean += weight[s]*this_mean_s
+
+                update_grad_s_gaussian_inhomo_no_corr(
+                    s, grad_all[tid,:,:], numBin, numNeuro, rate, weight,
+                    inv_cov_diag, gaussian_samples[n_iter,:,s], this_mean_s)
+
+    mean /= numIter
+    mean *= (-1) # mutual information
+    
+    # compute the rate gradient
+    
+    cdef double tmp_grad_term = 0
+    for p in range(numNeuro):
+        for s in range(numBin):
+            # the 2nd term is zero
+            # the first term
+            for k in range(my_num_threads):
+                grad[p,s] += grad_all[k,p,s] 
+            # devide by numIter
+            grad[p,s] /= numIter
+            grad[p,s] *= (-1)
+
+                        
+    # compute tuning gradient
+    for p in range(numNeuro):
+        for l in range(numBin):
+            MI_grad[p,l] = 0
+            for j in range(numBin):
+                MI_grad[p,l] += grad[p,j]*conv[(numBin+j-l) % numBin] 
+            MI_grad[p,l] *= tau
+
+    return mean#,mean_list_np,grad_all_np,poisson_samples_np,lrate_all_np, mexp_all_np,dexp_all_np
+
+# ----------Blahut-Arimoto Algorithm for Gaussian by Monte Carlo: Inhomogeneous, No correlations--------
+
+#@cython.boundscheck(False)
+#@cython.cdivision(True)
+cdef double compute_coeff_s_arimoto_gaussian_inhomo_no_corr(
+    int s, int numBin, int numNeuro,
+    double[:,:] rate, double[:] weight,
+    double[:,:] inv_cov_diag, double[:] rho,
+    double[:] response, double[:] quad) nogil: 
+    # for a fixed s in range(numBin)(s is same as m = 1,...,M in the notes)
+    # rate: numNeuro*numBin
+    # weight: numBin (sum up to 1)
+    # inv_cov_diag: numNeuro*numBin, 
+    # inv_cov_diag[:,j] contains the diagonal entries of the inverse covariance matrix of p(r|theta_j)    
+    # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2), can be pre-computed
+    # e.g. inv_cov_diag[:, j] = [1/f_{0,j}, ..., 1/f_{numNeuro-1, j}] for pseudo-Poissonian model,
+    #      rho[j] = (product of 1/f_{0,j}, ..., 1/f_{numNeuro-1, j})^{1/2}    
+    # response: numNeuro (specific to s, Gaussian distribution conditioning on s) 
+    # quad: numBin
+    
+    cdef int i, j, l, p #, indj, indk
+    cdef double exp_sum
+    
+    for l in range(numBin):
+        quad[l] = 0
+        for j in range(numNeuro):
+            quad[l] += inv_cov_diag[j,l]*(response[j] - rate[j,l])**2
+            
+    exp_sum = 0
+    for l in range(numBin):
+        exp_sum += weight[l]*rho[l]/rho[s]*exp(-0.5*(quad[l]- quad[s]))
+    
+  
+    return -log(exp_sum)
+    
+
+def mc_coeff_arimoto_gaussian_inhomo_no_corr(
+    double[:] coeff, double[:,:] tuning, double[:] weight,
+    double[:,:] inv_cov_diag,
+    double[:] slope,
+    double[:] conv, double tau, int numIter, int my_num_threads = 4):
+    '''Compute arimoto coefficients (exp of DKL).'''
+    # coeff: numBin (store result)
+    # tuing: numNeuro*numBin
+    # weight: numBin, sum up to one
+    # inv_cov_diag: numNeuro*numBin, where inv_cov_diag[:,j] contains 
+    #               the diagonal entries of the inverse covariance matrix of p(r|theta_j)
+    #               e.g. inv_cov_diag[:, j] = [1/f_{0,j}, ..., 1/f_{numNeuro-1, j}] 
+    #               for pseudo-Poissonian model    
+    # slope: numNeuro, >=0
+    # conv: numBin, weighted sum is one.
+   
+    
+    cdef int numNeuro = tuning.shape[0]
+    cdef int numBin = tuning.shape[1]
+   
+    cdef double[:,:] rate = np.zeros((numNeuro,numBin), dtype = np.float)
+    cdef Py_ssize_t i,j,l,k,m,p,s
+    cdef Py_ssize_t n_iter
+    
+    cdef double[:,:] coeff_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    cdef double[:,:] quad_all = np.zeros((my_num_threads, numBin), dtype = np.float)
+    
+    cdef double this_mean_s = 0
+    
+    for p in range(numNeuro):
+        for j in range(numBin):
+            for l in range(numBin):
+                rate[p,j] += tuning[p, (numBin+j-l) % numBin]*conv[l]
+            rate[p,j] *= tau
+            
+    # rho: numBin, rho[j] = det(inv_cov_mat[:,:,j])^(1/2)
+    cdef double[:] rho = np.sqrt(np.prod(inv_cov_diag, axis = 0)) #np.zeros(numBin, dtype = np.float)
+    #cdef double[:] rho = np.zeros(numBin, dtype = np.float)    
+    #for j in range(numBin):
+    #    rho[j] = np.sqrt(np.linalg.det(inv_cov_mat[:,:,j]))
+            
+    # generate Poission samples for all s = 1,...,numBin(different s, different samples)
+    #     np.random.seed(305)
+    
+    gaussian_samples_np = np.zeros((numIter, numNeuro,numBin), dtype = np.float)
+    for s in range(numBin):
+        cov_mat = np.diag(np.ones(numNeuro)/inv_cov_diag[:, s])# np.linalg.inv(inv_cov_mat[:,:,s])
+        gaussian_samples_np[:,:,s] = np.random.multivariate_normal(rate[:,s], cov_mat, size = numIter)
+                
+    cdef double[:,:,:] gaussian_samples = gaussian_samples_np
+
+        
+    cdef int tid
+
+    with nogil, parallel(num_threads = my_num_threads):
+        tid = threadid()
+        for n_iter in prange(numIter):
+            for s in range(numBin):
+                # samples conditioning on s: gaussian_samples[n_iter,:,s]
+                this_mean_s = compute_coeff_s_arimoto_gaussian_inhomo_no_corr(
+                    s, numBin, numNeuro, rate, weight, inv_cov_diag, rho,
+                    gaussian_samples[n_iter,:,s], quad_all[tid, :])
+                
+                coeff_all[tid, s] += this_mean_s
+                
+    for m in range(numBin): 
+        coeff[m] = 0
+        for tid in range(my_num_threads):
+            coeff[m] += coeff_all[tid, m]
+        coeff[m] /= numIter
+        coeff[m] = exp(coeff[m])
+        for p in range(numNeuro):
+            coeff[m] *= exp(-slope[p]*tuning[p,m])
+    return
