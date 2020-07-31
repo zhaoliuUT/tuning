@@ -39,8 +39,8 @@ class Arrow3D(FancyArrowPatch):
         FancyArrowPatch.draw(self, renderer)
 
 def plot_funcs_in_figure(fig, points_data, weights, path_vec = None,
-                         nrow=1, ncol=1, data_axis = 0,
-                         fp = 1, fm = 0,
+                         nrow=None, ncol=None, data_axis = 0,
+                         fp=None, fm=None,
                          **kwargs):
     '''In a given figure, plot tuning curves in subplots in grid (nrow, ncol).
        Return the generated subplots' axes. Note: similar to set_func_data_in_axis_list;
@@ -49,24 +49,32 @@ def plot_funcs_in_figure(fig, points_data, weights, path_vec = None,
        When data_axis = 1, plot the values of points_data[:,j] for each j.
        kwargs: same as in 'ax.plot' functions.
     '''
-    numNeuro, numBin = points_data.shape
+    nNeuro, nBin = points_data.shape
     if path_vec is not None:
         ordered_points_data = points_data[:, path_vec]
         ordered_weights = weights[path_vec]
     else:
         ordered_points_data = points_data
         ordered_weights = weights
-
+        
+    if nrow is None or ncol is None:
+        nrow = nNeuro
+        ncol = 1
+    if fp is None:
+        fp = np.max(points_data)
+    if fm is None:
+        fm = np.min(points_data)
+        
     ax_list = []
     if data_axis == 0:
-        for i in range(numNeuro):
+        for i in range(nNeuro):
             xx, yy = pc_fun_weights(ordered_points_data[i,:], ordered_weights)
             ax = fig.add_subplot(nrow, ncol, i+1)
             ax.plot(xx, yy, **kwargs)
             ax.set_ylim([fm, fp])
             ax_list.append(ax)
     else:
-        for i in range(numBin):
+        for i in range(nBin):
             ax = fig.add_subplot(nrow, ncol, i+1)
             ax.plot(ordered_points_data[:,i], **kwargs)
             ax.set_ylim([fm, fp])
