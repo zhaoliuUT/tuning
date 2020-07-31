@@ -81,6 +81,122 @@ def plot_funcs_in_figure(fig, points_data, weights, path_vec = None,
             ax_list.append(ax)
     return ax_list
 
+def plot_funcs_bars_in_figure(fig, points_data, weights, path_vec = None,
+                              nrow=None, ncol=None, fp=None, fm=None,
+                              num_colors = 21, cmap_name ='jet',
+                              add_colorbar = True,
+                              **kwargs):
+    '''In a given figure, plot tuning curves in subplots in grid (nrow, ncol), as colored bar plots.
+       Return the generated subplots' axes (including the colorbar axis). Note: similar to set_func_data_in_axis_list;
+       especially suitable for high dimensional data (numNeuro>3).
+       kwargs: same as in 'ax.plot' functions.
+    '''
+    nNeuro, nBin = points_data.shape
+    if path_vec is not None:
+        ordered_points_data = points_data[:, path_vec]
+        ordered_weights = weights[path_vec]
+    else:
+        ordered_points_data = points_data
+        ordered_weights = weights
+        
+    if nrow is None or ncol is None:
+        nrow = nNeuro
+        ncol = 1
+    if fp is None:
+        fp = np.max(points_data)
+    if fm is None:
+        fm = np.min(points_data)
+        
+    cmap = plt.cm.get_cmap(cmap_name, num_colors)
+    color_arr = np.array([cmap(i) for i in range(num_colors)])
+    
+    if add_colorbar:
+        gs_fig = gridspec.GridSpec(1, 2, figure=fig, width_ratios = [0.95, 0.05])
+        # first plot the colorbar
+        colorbarax = fig.add_subplot(gs_fig[1])
+        im = colorbarax.imshow(np.linspace(fp, fm, num_colors).reshape(-1, 1), cmap=cmap, \
+                               extent=[0, 0.5, fm, fp])
+        colorbarax.tick_params(axis="y", which='both', labelleft=False, labelright=True)
+        colorbarax.tick_params(axis="x", which='both', labelbottom=False, labeltop=False)
+        # next assign the function axes
+        gs00 = gridspec.GridSpecFromSubplotSpec(nrow, ncol, subplot_spec=gs_fig[0])
+        ax_list = []
+        for i in range(nNeuro):
+            ax = fig.add_subplot(gs00[i])
+            ax_list += [ax]
+        ax_list += [colorbarax]
+    else:
+        ax_list = []
+        for i in range(nNeuro):
+            ax = fig.add_subplot(nrow, ncol, i+1)
+            ax_list += [ax]
+    for j in range(nNeuro):
+        # split values into num_colors intervals
+        color_indices = np.floor((ordered_points_data[j,:]-fm)/(fp - fm)*(num_colors-1)).astype(int)
+        ax = ax_list[j]
+        ax.set_xlim([0, 1])
+        ax.set_ylim([-0.1, 0.1])
+        ax.set_aspect(0.2)
+        ax.set_yticks([])
+        if j < nNeuro - 1:
+            ax.set_xticks([])
+        for k in range(nBin):
+            rect = plt.Rectangle((np.sum(ordered_weights[:k]), -0.1), ordered_weights[k], 0.2,
+                                 facecolor=color_arr[color_indices[k]])
+            ax.add_artist(rect)
+        ax_list += [ax]
+    return ax_list
+
+def plot_funcs_circles_in_figure(fig, points_data, weights, grid_shape, path_vec = None,
+                                 nrow=None, ncol=None, fp = None, fm = None, 
+                                 num_colors = 21, color_map_name = 'jet', max_point_size = 300,
+                                 add_colorbar = True,
+                                 **kwargs):
+    nNeuro, nBin1, nBin2 = grid_shape
+    if nrow is None or ncol is None:
+        nrow = nNeuro
+        ncol = 1
+    if fp is None:
+        fp = np.max(points_data)
+    if fm is None:
+        fm = np.min(points_data)
+    points_data.reshape((nNeuro, nBin1*nBin2))
+    
+    cmap = plt.cm.get_cmap(color_map_name, num_colors)
+    color_arr = np.array([cmap(i) for i in range(num_colors)])
+    max_weight = np.max(weights)
+    xx, yy = np.meshgrid(np.arange(0, nBin1)*0.1, np.arange(0, nBin2)*0.1)
+    
+    if add_colorbar:
+        gs_fig = gridspec.GridSpec(1, 2, figure=fig, width_ratios = [0.95, 0.05])
+        colorbarax = fig.add_subplot(gs_fig[1])
+        im = colorbarax.imshow(np.linspace(fp, fm, num_colors).reshape(-1, 1), cmap=cmap, \
+                               extent=[0, 0.5, fm, fp])
+        colorbarax.tick_params(axis="y", which='both', labelleft=False, labelright=True)
+        colorbarax.tick_params(axis="x", which='both', labelbottom=False, labeltop=False)
+        
+        gs00 = gridspec.GridSpecFromSubplotSpec(nrow, ncol, subplot_spec=gs_fig[0])
+        ax_list = []
+        for i in range(nNeuro):
+            ax = fig.add_subplot(gs00[i])
+            ax_list += [ax]
+        ax_list += [colorbarax]
+    else:
+        ax_list = []
+        for i in range(nNeuro):
+            ax = fig.add_subplot(nrow, ncol, i+1)
+            ax_list += [ax]
+            
+    for i in range(nNeuro):
+        color_indices = np.floor((points_data[i,:]-fm)/(fp - fm)*(num_colors-1)).astype(int) 
+        # split values into num_colors intervals...
+        points_colors = color_arr[color_indices, :]
+        ax_list[i].scatter(xx.reshape(-1), yy.reshape(-1), s = weights/max_weight*max_point_size, c = points_colors, 
+                   **kwargs)
+        ax_list[i].set_xticks([])
+        ax_list[i].set_yticks([])
+    return ax_list
+
 def draw_cube_in_axis(ax, radius, min_radius):
     '''Draw a cube in 3d axis with corrdinates: [min_radius, radius]^3.
     The plotted boundaries of the cube are labeled as 'boundary_0', ..., 'boundary_11'.
