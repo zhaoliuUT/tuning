@@ -174,3 +174,30 @@ def find_unique_points_weights(points_data, points_weights=None, tol = 1e-3, ret
             return result, newweights, ind[errors > tol]
         else:
             return result, newweights
+        
+def compute_bump_widths(one_dim_tc, weights, fm = None):
+    # compute widths of bumps (which are continuous parts != fm)
+    # one_dim_tc: (numBin, ) numpy array, same shape as weights
+    # circulated.
+    if fm is None:
+        fm = np.min(one_dim_tc)
+    nBin = len(one_dim_tc)
+    fmindices = np.where(one_dim_tc==fm)[0]
+    diff_fmindices = np.diff(list(fmindices)+[fmindices[0]+100]) # diff_fmindices[i]=fmindices[i+1]-fmindices[i]
+    diff_fmindices2 = np.roll(diff_fmindices, 1) #diff_fmindices2[i] = fmindices[i] - fmindices[i-1]
+    
+    bump_start_indices = fmindices[diff_fmindices>1] 
+    bump_end_indices = fmindices[diff_fmindices2>1]
+    if diff_fmindices[-1]!=1: #one_dim_tc[-1]!=fm or one_dim_tc[0]!=fm
+        bump_start_indices = np.roll(bump_start_indices, 1)
+        
+    bump_widths_with_weights = np.zeros(len(bump_start_indices))
+    for k in range(len(bump_start_indices)):
+        j1 = bump_start_indices[k]
+        j2 = bump_end_indices[k]
+        if(j1 > j2):
+            bump_widths_with_weights[k] = np.sum(ww[j1+1:]) + np.sum(ww[0:j2])
+        else:
+            bump_widths_with_weights[k] = np.sum(ww[j1+1:j2]) # sum from ww[j1+1] to ww[j2-1]
+    return bump_widths_with_weights
+        
