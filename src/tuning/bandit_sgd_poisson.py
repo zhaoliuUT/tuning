@@ -155,39 +155,102 @@ def simple_sgd_poisson(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1, conv 
     return curve_list, grad_list
 
 def simple_sgd_poisson_with_laplacian(tuning, weight, eta, NUM_ITER, fp, fm, MC_ITER = 1,
-                       add_laplacian = False, laplacian_coeff = 0, #weighted_laplacian = False, # currently only 1d laplacian;
-    # assume the points are already arranged in neighbours
-                       conv = None, tau = 1.0, NUM_THREADS=1):
+                                      add_laplacian = False, laplacian_coeff = 0, 
+                                      weighted_laplacian = False,
+                                      conv = None, tau = 1.0, NUM_THREADS=1):
+    '''assume the points in 'tuning' and 'weight' are arranged in 1d neighbours
+    '''
     curve_list = []
     grad_list = []
     numBin = len(weight)
     if conv is None:
         conv = np.zeros(numBin)
         conv[0] = 1
-
+        
     x = tuning.copy()
-    x_grad = np.zeros_like(tuning)
-
-    #     if weighted_laplacian:
-#         laplacian_weights = weight
-#     else:
-#         laplacian_weights = np.ones(numBin)
-
+    x_grad = np.zeros_like(tuning)    
+    
     for i in range(NUM_ITER):
         x_grad *= 0
         x_mean = mc_mean_grad_noncyclic(x_grad, x, weight, conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
         x += eta*x_grad
-        if add_laplacian:
+        if add_laplacian and weighted_laplacian:
+            laplacian_term = np.zeros_like(x)
+            for j in range(numBin):
+                laplacian_term[:, j] = weight[(j-1)%numBin]*(x[:, (j-1)%numBin]-x[:, j])
+                laplacian_term[:, j] += weight[(j+1)%numBin]*(x[:, (j+1)%numBin]-x[:, j])
+            laplacian_term *= weight #laplacian_term[k, j]*weight[j]
+            x += laplacian_coeff * laplacian_term
+        elif add_laplacian:
             laplacian_term = np.zeros_like(x)
             for j in range(numBin):
                 laplacian_term[:, j] = x[:, (j-1)%numBin] + x[:, (j+1)%numBin] - 2*x[:, j]
-                #laplacian_term[:, j] *= laplacian_weights[j]
             x += laplacian_coeff * laplacian_term
-
+            
         x[x>fp] = fp
         x[x<fm] = fm
         curve_list.append(x.copy())
         grad_list.append(x_grad.copy())
-
+        
     return curve_list, grad_list
 
+def simple_sgd_poisson_with_laplacian_2d(
+    tuning, weight,
+    laplacian_shape, 
+    eta, NUM_ITER, fp, fm, MC_ITER = 1, 
+    add_laplacian = False, laplacian_coeff = 0, 
+    weighted_laplacian = False,
+    conv = None, tau = 1.0, NUM_THREADS = 4
+):
+    '''assume the points in 'tuning' and 'weight' are arranged in 2d neighbours
+    laplacian_shape: (numNeuro, numBin1, numBin2)
+    periodic boundary condition on the 2d grid.
+    (tuning, weight can be of numNeuro*(numBin1*numBin2) shape, or (numNeuro, numBin1, numBin2))
+    '''
+    curve_list = []
+    grad_list = []
+
+    nNeuro, nBin1, nBin2 = laplacian_shape
+    if conv is None:
+        conv = np.zeros(nBin1*nBin2)
+        conv[0] = 1
+        
+    tuning_shape = tuning.shape
+    x = tuning.reshape((nNeuro, nBin1*nBin2)).copy()
+    x_grad = np.zeros((nNeuro, nBin1*nBin2))
+    
+    for i in range(NUM_ITER):
+        x_grad *= 0
+        x_mean = mc_mean_grad_noncyclic(x_grad, x, weight.reshape(-1), 
+                                        conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
+        x += eta*x_grad
+                
+        if add_laplacian and weighted_laplacian:
+            xs = x.reshape((nNeuro, nBin1, nBin2))
+            ws = weight.reshape((nBin1, nBin2))
+            laplacian_term = np.zeros((nNeuro, nBin1, nBin2))
+            for j1 in range(nBin1):
+                for j2 in range(nBin2):
+                    laplacian_term[:, j1, j2] = ws[(j1-1)%nBin1, j2]*(xs[:, (j1-1)%nBin1, j2] - xs[:, j1, j2])
+                    laplacian_term[:, j1, j2] += ws[(j1+1)%nBin1, j2]*(xs[:, (j1+1)%nBin1, j2] - xs[:, j1, j2])
+                    laplacian_term[:, j1, j2] += ws[j1, (j2-1)%nBin2]*(xs[:,j1,(j2-1)%nBin2] - xs[:, j1, j2])
+                    laplacian_term[:, j1, j2] += ws[j1, (j2+1)%nBin2]*(xs[:,j1,(j2+1)%nBin2] - xs[:, j1, j2])
+            laplacian_term *= ws #laplacian_term[k, j1, j2]*ws[j1, j2]
+            xs += laplacian_coeff * laplacian_term
+            x = xs.reshape((nNeuro, nBin1*nBin2))
+            
+        elif add_laplacian:
+            xs = x.reshape((nNeuro, nBin1, nBin2))
+            laplacian_term = np.zeros((nNeuro, nBin1, nBin2))
+            for j1 in range(nBin1):
+                for j2 in range(nBin2):
+                    laplacian_term[:, j1, j2] = xs[:, (j1-1)%nBin1, j2] + xs[:, (j1+1)%nBin1, j2] \
+                    + xs[:,j1,(j2-1)%nBin2] + xs[:,j1,(j2+1)%nBin2]- 4*xs[:, j1, j2]
+            xs += laplacian_coeff * laplacian_term
+            x = xs.reshape((nNeuro, nBin1*nBin2))
+            
+        x[x>fp] = fp
+        x[x<fm] = fm
+        curve_list.append(x.reshape(tuning_shape).copy())
+        grad_list.append(x_grad.reshape(tuning_shape).copy())
+    return curve_list, grad_list
