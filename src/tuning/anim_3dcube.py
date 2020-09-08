@@ -302,7 +302,7 @@ def get_color_array(num_pts, cmap_name = 'nipy_spectral', shuffle_colors = False
 
 
 def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
-                             color_arr=None,
+                             color_arr=None, edgecolor_arr=None,
                              radius=1,
                              weights_txt_list=[],
                              weight_tol=1e-3, weight_format='%.2f',
@@ -336,9 +336,12 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
             Contains integers in [0,number of points-1], specifying the order in the path.
             If path_vec=None, no path will be plotted.
         color_arr:
-            color array with dimension (number of colors, 4).
-	    The number of colors must be the same as number of points.
+            color array with dimension (number of colors, 4), for face colors of the points.
+            The number of colors must be the same as number of points.
             Note: can be generated using get_color_arr(num_pts).
+            or: use matplotlib.colors like: color_arr = np.array([matplotlib.colors.to_rgba('k')]*num_pts)
+        edgecolor_arr:
+            color array with dimension (number of colors, 4), for edge colors of the points.
         radius:
             maximum value of the function.
         weights_txt_list:
@@ -399,6 +402,8 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
 
     if color_arr is not None and color_arr.shape[0]!=num_pts:
         raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
+    if edgecolor_arr is not None and edgecolor_arr.shape[0]!=num_pts:
+        raise Exception("Wrong dimension of edge color array: inconsistent with the number of points!")
 
     # set scatter points' data
     if data_dimension <= 2:
@@ -412,9 +417,10 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
 
     if data_dimension <= 2:
         scat.set_facecolor(color_arr) # only works for 2d
+        scat.set_edgecolor(edgecolor_arr)
     else:
         scat._facecolor3d = color_arr
-    scat.set_edgecolor('k')
+        scat._edgecolor3d = edgecolor_arr
     scat.set_alpha(1.0)
     sizes = np.ones(num_pts)*point_size
     if weights is not None:
