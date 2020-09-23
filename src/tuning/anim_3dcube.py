@@ -414,6 +414,8 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
     # set scatter points' colors, alpha, sizes
     if color_arr is None:
         color_arr = get_color_array(num_pts)
+    if edgecolor_arr is None:
+        edgecolor_arr = color_arr
 
     if data_dimension <= 2:
         scat.set_facecolor(color_arr) # only works for 2d
