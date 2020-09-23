@@ -176,7 +176,6 @@ def simple_sgd_gaussian_with_laplacian(
 
     return curve_list, grad_list
 
-
 def simple_sgd_gaussian_with_laplacian_no_bc(
     tuning, weight, inv_cov_mat, 
     eta, NUM_ITER, fp, fm, MC_ITER = 1, 
@@ -268,6 +267,72 @@ def simple_sgd_gaussian_with_laplacian_2d(
         curve_list.append(x.reshape((nNeuro, nBin1, nBin2)).copy())
         grad_list.append(x_grad.reshape((nNeuro, nBin1, nBin2)).copy())
     return curve_list, grad_list
+
+def simple_sgd_gaussian_inhomo_no_corr_var_deriv(
+    func_update_inv_cov_diag, # the function to update the inverse covariance matrix (diagonal form) and the derivative
+    tuning, weight, inv_cov_diag,
+    var_derivative, # derivative of variances
+    eta, NUM_ITER, fp, fm, MC_ITER = 1,
+    laplacian_coeff = 0, #weighted_laplacian = False, # currently only 1d laplacian;
+    weighted_laplacian = False, 
+    # assume the points are already arranged in neighbours
+    conv = None, tau = 1.0, NUM_THREADS = 4,
+    **kwargs # keyword arguments for func_update_inv_cov
+):
+    '''Including derivatives for covariance.'''
+    curve_list = []
+    grad_list = []
+    numBin = len(weight)
+    if conv is None:
+        conv = np.zeros(numBin)
+        conv[0] = 1
+
+    x = tuning.copy()
+    x_grad = np.zeros_like(tuning)
+
+#     if weighted_laplacian:
+#         laplacian_weights = weight
+#     else:
+#         laplacian_weights = np.ones(numBin)
+
+    for i in range(NUM_ITER):
+        x_grad *= 0
+        x_mean = mc_mean_grad_gaussian_inhomo_no_corr_var_deriv(
+            x_grad, x, weight, inv_cov_diag, var_derivative, 
+            conv, tau, numIter=MC_ITER, my_num_threads=NUM_THREADS)
+        x += eta*x_grad
+        
+        if laplacian_coeff > 0 and weighted_laplacian:
+            laplacian_term = np.zeros_like(x)
+            for j in range(numBin):
+                laplacian_term[:, j] = weight[(j-1)%numBin]*(x[:, (j-1)%numBin]-x[:, j])
+                laplacian_term[:, j] += weight[(j+1)%numBin]*(x[:, (j+1)%numBin]-x[:, j])
+            laplacian_term *= weight #laplacian_term[k, j]*weight[j]
+            x += laplacian_coeff * laplacian_term
+        elif laplacian_coeff > 0:
+            laplacian_term = np.zeros_like(x)
+            for j in range(numBin):
+                laplacian_term[:, j] = x[:, (j-1)%numBin] + x[:, (j+1)%numBin] - 2*x[:, j]
+            x += laplacian_coeff * laplacian_term
+        
+        x[x>fp] = fp
+        x[x<fm] = fm
+        curve_list.append(x.copy())
+        grad_list.append(x_grad.copy())
+        # updating the inverse covariance matrix
+#         print(x.shape)
+        inv_cov_diag, var_derivative = func_update_inv_cov_diag(x, **kwargs)
+
+    return curve_list, grad_list
+
+def compute_poisson_inv_cov_diag(this_tc, poisson_ratio = 1.0, fix_sigma = 0):
+    # constructing inverse covariance matrix (diagonal form)
+    # for variance(f) = poisson_ratio*f + (1-poisson_ratio)*fix_sigma^2
+    # poisson_ratio in [0, 1]
+    n1, n2 = this_tc.shape
+    inv_cov_diagonal = 1.0/(poisson_ratio*this_tc+(1-poisson_ratio)*fix_sigma**2) # (numNeuro, numBin)
+    variance_derivative = poisson_ratio*np.ones((n1, n2))
+    return inv_cov_diagonal, variance_derivative
 
 #=========Plotting functions=========
 
