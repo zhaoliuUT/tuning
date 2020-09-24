@@ -5,546 +5,593 @@ import scipy
 from scipy import optimize
 from functools import partial
 
-from cyMINoncyclic import *
-from anim_3dcube import *
+from tuning.cyMINoncyclic import *
 from tuning.tuning_curve_noncyclic import *
+from tuning.simple_sgd import simple_sgd_with_laplacian
+from tuning.anim_3dcube import pc_fun_weights, gen_mixed_anim
+
 
 class TuningCurveOptimizer_Noncyclic:
     """TuningCurveOptimizer_Noncyclic Class
-    # Poisson Distribution
+    # Poisson/Gaussian Distribution
+    For old version with the average constraint (old algorithm),
+    see commit: 8b58799
+    
     Attributes:
-        Properties: numNeuro, numBin, conv, tau
-        Optimization Information: fp, fm, tuning0, grad0, info0, average_cons, bounds
-        Result Storage: res_list, res_len, num_iter, inter_steps [these 4 attributes can change]
+        Properties: model, numNeuro, numBin, conv, tau, num_threads
+        Current Tuning Information: tuning0, grad0, info0, average_cons, bounds
+        Optimization Constraints: fp, fm, fp_vec, fm_vec (temporarily not used in SGD),
+                                  laplacian_2d (true or false), laplacian_shape, weighted_laplacian
+        Result Storage: res_len, and 13 lists:
+            tuning_list, weight_list, info_list, grad_list, 
+            inv_cov_list, laplacian_coeff_list, time_list, mark_list, 
+            sgd_learning_rate_list, sgd_batch_size_list, sgd_iter_steps_list, 
+            ba_batch_size_list, ba_iter_steps_list        
         
     Methods:
         __init__(self,
-                 TuningCurve_init, # initial input (TuningCurve_Noncyclic object)
+                 model,
+                 tc_init, # initial input (TuningCurve_Noncyclic object)
                  fp, # upper bound (vector of size numNeuro or constant)
                  fm, # lower bound (vector of size numNeuro or constant)
-                 average_cons = None, # average constraints (vector of size numNeuro or constant) # upper bounds
-                 )
-                 
-        # NUM_THREADS, USE_MC, MC_ITER_INFO, MC_ITER_GRAD , MC_ITER_BA, 
-        # SUM_THRESHOLD_INFO, SUM_THRESHOLD_GRAD, SUM_THRESHOLD_BA: stored in res_list.
-        channel_iterate(self,
-                        NUM_ITER = 1, 
-                        INTER_STEPS = 1, 
-                        ADD_EQ_CONS = False,
-                        ADD_INEQ_CONS = False,
-                        NUM_THREADS = 8,
-                        USE_MC = True,
-                        MC_ITER_INFO = 1e5,
-                        MC_ITER_GRAD = 1e5, 
-                        SUM_THRESHOLD_INFO = 50, 
-                        SUM_THRESHOLD_GRAD = 50,
-                        PRINT = True, 
-                        FILE_NAME = "", 
-                        ADD_TIME = True,
-                        ftol = 1e-15, 
-                        disp = False)
-                        
-        capacity_iterate(self,
-                         initial_slope = 0, #initialized slope, positive number or numpy array
-                         capacity_tol = 1e-3, # tolerance for reaching capacity
-                         slope_stepsize = 1e-2, # stepsize for slope iteration
-                         constraint_tol = 1e-3, # tolerance for reaching the constraints
-                         MAX_ITER = 1, # max number of iterations
-                         EVAL_STEPS = 1, # mutual information evaluation every EVAL_STEPS steps.
-                         ADD_EQ_CONS = False,
-                         ADD_INEQ_CONS = False,
-                         NUM_THREADS = 8,
-                         USE_MC = True,
-                         MC_ITER_BA = 1e5,
-                         SUM_THRESHOLD_BA = 50,
-                         PRINT = True,
-                         FILE_NAME = "",
-                         ADD_TIME = True)
-
-        plot_res_id(self, i, ALL = True)
-        
-        plot_animation(self, FILE_NAME = "", ADD_TIME = True, XTICKS_IDX_LIST = [], \
-                       ALIGN = "row", INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, \
-                       interval = 1000, dt = 1, IF_CUBE = False)
-        
-        plot_info(self, TITLE = "", maker = '.')
-        save_res_list(self, FILE_NAME = "", ADD_TIME = True)
+                 num_threads=8, # number of threads in parallel computation
+                )
+        iterate(self,
+                total_num_iter, # total number of iterations
+                sgd_learning_rate,                 
+                laplacian_coeff=0, # laplacian coefficient in regularization
+                laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
+                laplacian_shape=None, # only for 2d laplacian
+                weighted_laplacian=False, # whether laplacian is weighted
+                
+                sgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
+                sgd_batch_size=1000, # batch size for sgd
+                sgd_iter_steps=1, # number of steps for sgd in every cycle
+                ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
+                ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
+                
+                alter_compute_info=1, # compute mutual information every several steps
+                alter_compute_info_mc=1e4, # number of Monte Carlo iterations used
+                print_info=True, # print mutual information every several steps
+                plot_live=False, #used in live plotting, only available for 1d
+                alter_plot_live=10, # plot every several steps
+                live_fig=None, # figure used for live plotting
+                live_ax_list=None, # axes used for live plotting                
+               )
+               
+        check_list_len(self) # check the lists' lengths
+        reset(self, pos) # reset the lists at the given position
+        take_res_id(self, pos) # take the 'pos'-th tuning curve (TuningCurve_Noncyclic object)
+        plot_res_id(self, pos, **kwargs)
+            Plot the tuning curve at the given index.
+            See TuningCurve_Noncyclic.plot for keyword arguments.
+        plot_info(self, ax, alternate=False, color_sgd='r', color_ba='b')
+             Simple plotting mutual information, or alternate the sgd/arimoto steps using different colors
+             
+        plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000,
+                       dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
+                       INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, 
+                       # options for non-cube animation
+                       INCLUDE_WEIGHT=True,# option for both
+                       INCLUDE_FUN = True, INCLUDE_WEIGHT_BAR = True, # options for cube animation
+                       **kwargs,# options for cube animation
+                       )
+            Old version for plotting animation
+        plot_animation_cube(self,
+                            path_vec_list=None,
+                            color_arr_list=None,
+                            radius=1, min_radius=0,
+                            INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                            FILE_NAME="", ADD_TIME=True,
+                            interval=1000,
+                            **kwargs,
+                           )
+            Plot cube animation for 3d case. See 'gen_mixed_plots' in anim_3dcube.py
+        save_res_dict(self, file_name="", add_time=True)
     Static Methods:
-        load_res_list(filename) # Usage: TuningCurveOptimizer_Noncyclic.load_res_list(filename)
+        load_res_dist(filename) 
+        # Usage: TuningCurveOptimizer_Noncyclic.load_res_dist(filename)
          
     """
     def __init__(self,
-                 TuningCurve_init, # initial input (TuningCurve_Noncyclic object)
+                 model,
+                 tc_init, # initial input (TuningCurve_Noncyclic object)
                  fp, # upper bound (vector of size numNeuro or constant)
                  fm, # lower bound (vector of size numNeuro or constant)
-                 average_cons = None, # average constraints (vector of size numNeuro or constant) # upper bounds
+                 num_threads=8, # number of threads in parallel computation
                 ):
         
-        #self.TuningCurve_init = copy.copy(TuningCurve_init)
-        self.numNeuro = TuningCurve_init.numNeuro # 2
-        self.numBin = TuningCurve_init.numBin 
-        self.conv = TuningCurve_init.conv.copy()
-        self.tau = TuningCurve_init.tau
+        if model not in ['Poisson', 'GaussianHomo', 'GaussianInhomo', 'GaussianInhomoNoCorr']:
+            raise Exception('Wrong input for the model!')
+        if model != tc_init.model:
+            raise Exception('Model mismatch tc_init.model!')
         
+        self.model = model
+        self.numNeuro = tc_init.numNeuro # 2
+        self.numBin = tc_init.numBin 
+        self.conv = tc_init.conv.copy()
+        self.tau = tc_init.tau
+        self.num_threads = num_threads
+
+        # fp and fm constraints
         if isinstance(fp, (int, float, complex)) or isinstance(fm, (int, float, complex)): # is number
-            fp = fp*np.ones(self.numNeuro)
-            fm = fm*np.ones(self.numNeuro)
-        fp = np.array(fp)  # numpy array
-        fm = np.array(fm)
-        if fp.size and fm.size: # nonempty
-            if fp.size != self.numNeuro or fm.size != self.numNeuro:
+            self.fp = fp
+            self.fm = fm
+            fp_vec = fp*np.ones(self.numNeuro)
+            fm_vec = fm*np.ones(self.numNeuro)
+        else: # fp, fm can be arrays or lists for different neurons
+            fp_vec = np.array(fp)  # numpy array
+            fm_vec = np.array(fm)
+            self.fp = np.max(fp_vec)
+            self.fm = np.min(fm_vec)
+        if fp_vec.size and fm_vec.size: # nonempty
+            if fp_vec.size != self.numNeuro or fm_vec.size != self.numNeuro:
                 raise Exception('Dimension mismatch for fp/fm!')
-            if np.any(fp < 0) or np.any(fm <0) or np.any(fm > fp):
+            if np.any(fp_vec < 0) or np.any(fm_vec <0) or np.any(fm_vec > fp_vec):
                 raise Exception('Wrong input for fp/fm!')
         else:
-            raise Exception('Missing input for fp, fm!')
+            raise Exception('Missing input for fp, fm!') 
             
-        if average_cons is not None:
-            if isinstance(average_cons, (int, float, complex)): # is number
-                average_cons = average_cons*np.ones(self.numNeuro)
-            average_cons = np.array(average_cons)  # numpy array
-            if average_cons.size != self.numNeuro:
-                raise Exception('Dimension mismatch for average constraints!')
-            if np.any(average_cons < 0):
-                raise Exception('Wrong input for average_cons: must be non-negative!')
-            if np.any(average_cons < np.dot(TuningCurve_init.tuning, TuningCurve_init.weight)):
-                raise Exception('Wrong input for average_cons: must be >= initial average!')
-
-
-        self.fp = fp.copy() # might be None
-        self.fm = fm.copy() # might be None
-        
-        self.tuning0 = TuningCurve_init.tuning.copy()         
-        self.weight0 = TuningCurve_init.weight.copy()
-        self.grad0 = TuningCurve_init.grad.copy()        
-        self.info0 = TuningCurve_init.info
-        # use total average instead of individual average for each neuro tuning curve
-        self.average_cons = average_cons.copy() if average_cons is not None else None
-        #np.dot(self.tuning0, self.weight0) # self.average_cons = np.average(TuningCurve_init.tuning)
+        self.fp_vec = fp_vec
+        self.fm_vec = fm_vec
         
         self.bounds = []
         for j in range(self.numNeuro):
             for i in range(self.numBin):
-                self.bounds += [(fm[j], fp[j])]
+                self.bounds += [(self.fm_vec[j], self.fm_vec[j])]
         self.bounds = tuple(self.bounds)
         
-        res_list = {'x':[self.tuning0.copy()],'grad':[self.grad0.copy()],'obj':[self.info0],\
-                    'weight': [self.weight0.copy()],\
-                    'slope': [None],\
-                    'success':[1],'status':[1],'nfev':[0],'njev':[0]}
-        res_list.update({'numNeuro': self.numNeuro, 'average': self.average_cons,\
-                         'tau': self.tau, 'conv':self.conv.copy(), \
-                         'fp': copy.copy(self.fp), 'fm': copy.copy(self.fm),\
-                         'USE_MC': [None], 'NUM_THREADS': [0], \
-                         'MC_ITER_INFO': [0], 'MC_ITER_GRAD': [0], 'MC_ITER_BA': [0], \
-                         'SUM_THRESHOLD_INFO': [0], 'SUM_THRESHOLD_GRAD': [0], 'SUM_THRESHOLD_BA': [0],\
-                         'num_iter': [0], 'inter_steps':[0]})
-        self.res_list = res_list # result list
+        # current tuning, weight, grad, info
+        self.tuning = tc_init.tuning.copy()        
+        self.weight = tc_init.weight.copy()
+        self.grad = tc_init.grad.copy()
+        self.info = tc_init.info
+        
+        # inverse covariance matrix        
+        if self.model == 'Poisson':
+            self.inv_cov_mat = None
+        else:
+            self.inv_cov_mat = tc_init.inv_cov_mat.copy()
+        
+        # lists for saving results
+        self.tuning_list = [tc_init.tuning.copy()]
+        self.weight_list = [tc_init.weight.copy()]
+        self.info_list = [tc_init.info]
+        self.grad_list = [tc_init.grad.copy()]
+        if self.model == 'Poisson':
+            self.inv_cov_list = [None]
+        else:
+            self.inv_cov_list = [tc_init.inv_cov_mat.copy()]
+        self.time_list = [None]
+        self.mark_list = [None]
+        self.sgd_learning_rate_list = [None]
+        self.sgd_batch_size_list = [None]
+        self.sgd_iter_steps_list = [None]
+        self.ba_batch_size_list = [None]
+        self.ba_iter_steps_list = [None]
+        self.laplacian_coeff_list = [None]
+
         self.res_len = 1 # result list length
-        #self.num_iter = [0] # number of iterations
-        #self.inter_steps = [0] # default
+        self.laplacian_2d = False # apply 2d laplacian or not
+        self.laplacian_shape = None
+        self.weighted_laplacian = False
+
+
+    def iterate(self,
+                total_num_iter, # total number of iterations
+                sgd_learning_rate,                 
+                laplacian_coeff=0, # laplacian coefficient in regularization
+                laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
+                laplacian_shape=None, # only for 2d laplacian
+                weighted_laplacian=False, # whether laplacian is weighted
+                
+                sgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
+                sgd_batch_size=1000, # batch size for sgd
+                sgd_iter_steps=1, # number of steps for sgd in every cycle
+                ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
+                ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
+                
+                alter_compute_info=1, # compute mutual information every several steps
+                alter_compute_info_mc=1e4, # number of Monte Carlo iterations used
+                print_info=True, # print mutual information every several steps
+                plot_live=False, #used in live plotting, only available for 1d
+                alter_plot_live=10, # plot every several steps
+                live_fig=None, # figure used for live plotting
+                live_ax_list=None, # axes used for live plotting                
+               ):
         
+        self.laplacian_2d = laplacian_2d
+        self.laplacian_shape = laplacian_shape
+        self.weighted_laplacian = weighted_laplacian
+        if (not laplacian_2d) and (laplacian_shape is not None):
+            raise Exception('No input needed for laplacian shape for 1d neighbour case')
+        if laplacian_2d and laplacian_shape is None:
+            raise Exception('Missing input for laplacian shape for 2d neighbour case')
+        if laplacian_shape is not None:
+            if (len(laplacian_shape)!= 3 or laplacian_shape[0] != self.numNeuro 
+                or laplacian_shape[1]*laplacian_shape[2]!= self.numBin):
+                raise Exception('Wrong input for laplacian shape for 2d neighbour case')    
         
-        
-    def channel_iterate(self,
-                        NUM_ITER = 1, 
-                        INTER_STEPS = 1, 
-                        ADD_EQ_CONS = False,
-                        ADD_INEQ_CONS = False,
-                        NUM_THREADS = 8, 
-                        USE_MC = True,
-                        MC_ITER_INFO = 1e5, MC_ITER_GRAD = 1e5,
-                        SUM_THRESHOLD_INFO = 50, SUM_THRESHOLD_GRAD = 50,
-                        PRINT = True, FILE_NAME = "", \
-                        ADD_TIME = True, ftol = 1e-15, disp = False):
-        # INTER_STEPS: intermediate steps for printing and saving
-        # NUM_ITER: total number of iterations
-        # number of plotting/saving: NUM_ITER/INTER_STEPS
-        
-        if self.average_cons is None and (ADD_EQ_CONS or ADD_INEQ_CONS):
-            raise Exception('Must input average constraint!')
-
-        tmpgrad = np.zeros_like(self.grad0) # just for temporary storage
-
-
-        def opt_fun(x, weight, self):
-            if USE_MC:
-                return -mc_mean_grad_noncyclic(tmpgrad, x.reshape((self.numNeuro,self.numBin)), weight,
-                                               self.conv, self.tau, 
-                                               MC_ITER_INFO, NUM_THREADS)
-            else:
-                return -partial_sum_mean_grad_noncyclic(tmpgrad, x.reshape((self.numNeuro,self.numBin)), weight,
-                                                       self.conv, self.tau,
-                                                       SUM_THRESHOLD_INFO, NUM_THREADS)
-        def grad_fun(x,weight, self): 
-            x_grad = np.zeros((self.numNeuro,self.numBin), dtype = np.float)
-            if USE_MC:
-                x_mean = mc_mean_grad_noncyclic(x_grad, x.reshape((self.numNeuro,self.numBin)), weight,
-                                                self.conv, self.tau,
-                                                MC_ITER_GRAD, NUM_THREADS)
-            else:
-                x_mean = partial_sum_mean_grad_noncyclic(x_grad, x.reshape((self.numNeuro,self.numBin)), weight, 
-                                                        self.conv, self.tau,
-                                                        SUM_THRESHOLD_INFO, NUM_THREADS)
-            return -x_grad.reshape(-1)
-        
-
-        
-        curr_tuning = self.res_list['x'][-1].reshape(-1).copy()
-        curr_weight = self.res_list['weight'][-1].copy()
-        #plt.plot(self.res_list['x'][-1][0])
-        #plt.plot(self.res_list['x'][-1][1])
-        #plt.show()
-
-        curr_num_iter = sum(self.res_list['num_iter'])
-        
-        if PRINT:
-            print('{0:4s}   {1:9s}  {2:9s}  {3:9s}'.format('Iter', 'Mutual Information', 'Capacity Gap', 'Average'))
-            curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
-            print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,self.res_list['obj'][-1], ' ', ' ')
-                  + str(curr_avg)
-                 )
-            #curr_avg = np.average(np.dot(tc_opt_nc.res_list['x'][-1], curr_weight))
-            #print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}  {4:3.6f}'.format(0,tc_opt_nc.res_list['obj'][-1], ' ', '+', curr_avg))
-
-
-        my_cons = []
-        if ADD_EQ_CONS:
-            if self.numNeuro == 1:
-                my_cons += [{'type':'eq', 'fun': lambda x: (self.average_cons - np.dot(x, curr_weight))}]
-            else:
-                def constraint_fun(x, n):
-                    vec = x.reshape(self.numNeuro, -1)
-                    return self.average_cons[n] - np.dot(vec[n], curr_weight)
-                my_cons += [{'type':'eq', 'fun': partial(constraint_fun, n = i)} for i in range(self.numNeuro)]
-        if ADD_INEQ_CONS:
-            #inequality means that it is to be non-negative.
-            # current average <= defined average constraint.
-            if self.numNeuro == 1:
-                my_cons += [{'type':'ineq', 'fun': lambda x: (self.average_cons - np.dot(x, curr_weight))}]
-            else:
-                def constraint_fun(x, n):
-                    vec = x.reshape(self.numNeuro, -1)
-                    return self.average_cons[n] - np.dot(vec[n], curr_weight)
-                my_cons += [{'type':'ineq', 'fun': partial(constraint_fun, n = i)} for i in range(self.numNeuro)]
-
-            
-        for i in range(int(NUM_ITER/INTER_STEPS)):
-            if ADD_EQ_CONS or ADD_INEQ_CONS:
-                res = optimize.minimize(lambda x, self: opt_fun(x, curr_weight, self), \
-                                        curr_tuning, method='SLSQP', args = self, \
-                                        jac = lambda x, self:grad_fun(x, curr_weight, self), \
-                                        bounds = self.bounds, constraints = my_cons, \
-                                        options = {'maxiter':INTER_STEPS, 'ftol': ftol, 'disp': disp})
-            else: # no averge constraints                
-                 res = optimize.minimize(lambda x, self: opt_fun(x, curr_weight, self), \
-                                        curr_tuning, method='SLSQP', args = self, \
-                                        jac = lambda x, self:grad_fun(x, curr_weight, self), \
-                                        bounds = self.bounds,\
-                                        options = {'maxiter':INTER_STEPS, 'ftol': ftol, 'disp': disp})
-        
-            curr_tuning = res['x'].copy()
-            # FIXME: judge whether the iteration stops before reaching maxiter.
-            # actual number of iterations is res['nit'] - 1
-            curr_num_iter += INTER_STEPS
-            #print curr_tuning.shape
-            # self.num_iter += INTER_STEPS
-            self.res_list['x'].append(res['x'].reshape((self.numNeuro, self.numBin)).copy())
-            self.res_list['grad'].append(-res['jac'][0:self.numNeuro*self.numBin].reshape((self.numNeuro, self.numBin)).copy())
-            self.res_list['obj'].append(-res['fun'])            
-            self.res_list['success'].append(res['success'])
-            self.res_list['status'].append(res['status'])
-            self.res_list['nfev'].append(res['nfev'])
-            self.res_list['njev'].append(res['njev'])
-            self.res_list['weight'].append(curr_weight.copy())
-            self.res_list['slope'].append(None)
-            if PRINT:
-                curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
-                print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,-res['fun'], ' ', ' ')
-                      + str(curr_avg)
-                     )
-
-                # print res['jac'].shape # 
-        # save result list by default
-        self.res_len = len(self.res_list['x'])
-        #self.num_iter
-        #self.inter_steps.append(INTER_STEPS)
-        self.res_list['num_iter'].append(NUM_ITER)
-        self.res_list['inter_steps'].append(INTER_STEPS)
-        self.res_list['NUM_THREADS'].append(NUM_THREADS)
-        self.res_list['USE_MC'].append(USE_MC)
-        if USE_MC:
-            self.res_list['MC_ITER_INFO'].append(MC_ITER_INFO)
-            self.res_list['MC_ITER_GRAD'].append(MC_ITER_GRAD)
-            self.res_list['SUM_THRESHOLD_INFO'].append(0)
-            self.res_list['SUM_THRESHOLD_GRAD'].append(0)
+        curr_tuning = self.tuning.copy()
+        curr_weight = self.weight.copy()
+        if self.model == 'Poisson':
+            curr_inv_cov_mat = None
         else:
-            self.res_list['MC_ITER_INFO'].append(0)
-            self.res_list['MC_ITER_GRAD'].append(0)
-            self.res_list['SUM_THRESHOLD_INFO'].append(SUM_THRESHOLD_INFO)
-            self.res_list['SUM_THRESHOLD_GRAD'].append(SUM_THRESHOLD_GRAD)
-        self.res_list['MC_ITER_BA'].append(0)
-        self.res_list['SUM_THRESHOLD_BA'].append(0)
-        if FILE_NAME != "" or ADD_TIME == True:
-            self.save_res_list(FILE_NAME, ADD_TIME)
+            curr_inv_cov_mat = self.inv_cov_mat.copy()
         
+        # determine the functions for Blahut-Arimoto iterations and information evaluations
+        if self.model == 'Poisson':         
+            ba_iter_func = mc_coeff_arimoto
+            mc_iter_func = mc_mean_grad_noncyclic
+        elif self.model == 'GaussianHomo':
+            ba_iter_func = mc_coeff_arimoto_gaussian
+            mc_iter_func = mc_mean_grad_gaussian
+        elif self.model == 'GaussianInhomo':
+            ba_iter_func = mc_coeff_arimoto_gaussian_inhomo
+            mc_iter_func = mc_mean_grad_gaussian_inhomo
+        elif self.model == 'GaussianInhomoNoCorr':
+            ba_iter_func = mc_coeff_arimoto_gaussian_inhomo_no_corr
+            mc_iter_func = mc_mean_grad_gaussian_inhomo_no_corr
+            # when the variance has a derivative it is implemented,
+            # but function arguments are not compatible with other sgd&arimoto functions.
+                
+        for num_iter in range(1, total_num_iter+1):
+            if sgd_decrease_lr:
+                curr_sgd_learning_rate = sgd_learning_rate/(np.sqrt(num_iter + 1))
+            else:
+                curr_sgd_learning_rate = sgd_learning_rate
    
-    def capacity_iterate(self,
-                         initial_slope = 0, #initialized slope, positive number or numpy array
-                         capacity_tol = 1e-3, # tolerance for reaching capacity
-                         slope_stepsize = 1e-2, # stepsize for slope iteration
-                         constraint_tol = 1e-3, # tolerance for reaching the constraints
-                         MAX_ITER = 1, # max number of iterations
-                         EVAL_STEPS = 1, # mutual information evaluation every EVAL_STEPS steps.
-                         ADD_EQ_CONS = False, ADD_INEQ_CONS = False,\
-                         NUM_THREADS = 8, \
-                         USE_MC = True,\
-                         MC_ITER_BA = 1e5, SUM_THRESHOLD_BA = 50,\
-                         PRINT = True, FILE_NAME = "", ADD_TIME = True):
+            curr_sgd_batch_size = sgd_batch_size
+            curr_sgd_iter_steps = sgd_iter_steps #int(1000/curr_sgd_batch_size)
+            curr_ba_batch_size = ba_batch_size
+            curr_ba_iter_steps = ba_iter_steps
+            curr_laplacian_coeff = laplacian_coeff
 
-        if isinstance(initial_slope, (int, float, complex)): # is number
-            initial_slope = initial_slope*np.ones(self.numNeuro)
-        initial_slope = np.array(initial_slope)  # numpy array
-        if initial_slope.size != self.numNeuro:
-            raise Exception('Dimension mismatch for the initial slope!')
-        if np.any(initial_slope < 0):
-            raise Exception('The initial slope must be non-negative!')
+            # ------SGD for updating the points' coordinates------
+            curr_time = time.time()
+            x_list, _ = simple_sgd_with_laplacian(
+                self.model,
+                curr_tuning, curr_weight,                
+                inv_cov_mat=curr_inv_cov_mat,
+                eta=curr_sgd_learning_rate,                
+                mc_iter=curr_sgd_batch_size,
+                num_iter=curr_sgd_iter_steps,
+                fp=self.fp,
+                fm=self.fm, # not working when fp_vec, fm_vec is not uniform...
+                laplacian_coeff=laplacian_coeff,
+                laplacian_shape=laplacian_shape,
+                weighted_laplacian=weighted_laplacian,
+                conv=self.conv,
+                tau=self.tau,
+                num_threads=self.num_threads,
+            )
+    
 
-        if self.average_cons is None and (ADD_EQ_CONS or ADD_INEQ_CONS):
-            raise Exception('Must input average constraint!')
+            curr_tuning = x_list[-1].copy()
+            self.tuning_list.append(curr_tuning.copy())
+            self.weight_list.append(curr_weight.copy())
+            self.mark_list.append('sgd')
 
-        if ADD_EQ_CONS:
-            raise Exception("Blahut-Arimoto with equality constraints: not implemented yet.")
-        if ADD_INEQ_CONS:
-            #inequality means that it is to be non-negative.
-            # current average <= defined average constraint.
-            if self.numNeuro == 1:
-                constraint_ineq = lambda x, w: (self.average_cons - np.dot(x, w))
-            else:
-                constraint_ineq = lambda x, w: (self.average_cons - np.dot(x.reshape(self.numNeuro, -1), w))
+            spent_time1 = time.time() - curr_time
+            self.time_list.append(spent_time1)
 
-        curr_tuning = self.res_list['x'][-1].copy()
-        curr_weight = self.res_list['weight'][-1].copy()
-        
-        curr_num_iter = sum(self.res_list['num_iter'])
-        tmpgrad = np.zeros_like(self.grad0) # just for temporary storage
-        weight_new = np.zeros_like(curr_weight)
-        
-        if ADD_INEQ_CONS:
-            curr_slope = initial_slope.copy()
-        else:
-            curr_slope = np.zeros(self.numNeuro)
-        slope_new = np.zeros_like(curr_slope)
-        coeff = np.zeros(self.numBin)
 
-        curr_x = curr_tuning
-        if PRINT:
-            curr_avg = np.dot(self.res_list['x'][-1], curr_weight)
-            print('{0:4d}   {1: 3.6f} {2:15s}  {3:6s}'.format(curr_num_iter,self.res_list['obj'][-1], ' ', ' ')
-                  + str(curr_avg)
-                 )
-        
-        halt_during_iter = False
-        for k in range(MAX_ITER):
-            # update coefficients
-            if USE_MC:
-                mc_coeff_arimoto(coeff, curr_x, curr_weight, curr_slope, 
-                                 self.conv, self.tau, MC_ITER_BA, NUM_THREADS)
-            else:
-                partial_sum_coeff_arimoto(coeff, curr_x, curr_weight, curr_slope,
-                                           self.conv, self.tau, SUM_THRESHOLD_BA, NUM_THREADS)
-            # judge the capacity convergence, adjust weights and parameters(slope)
-
-            weight_new = curr_weight.copy()
-            slope_new = curr_slope.copy()
-
-            capacity_gap = np.log(np.max(coeff)) - np.sum(curr_weight*np.log(coeff))
-            change_slope = False
-            if capacity_gap > capacity_tol:
-                # update weights
-                weight_new = curr_weight*coeff / np.sum(curr_weight*coeff)
-            else:
-                if ADD_INEQ_CONS:
-                    for p in range(self.numNeuro):
-                        if np.dot(curr_weight, curr_x[p,:]) > self.average_cons[p] + constraint_tol:
-                            slope_new[p] = curr_slope[p] + slope_stepsize
-                            change_slope = True
-                        elif np.dot(curr_weight, curr_x[p,:]) < self.average_cons[p] - constraint_tol and \
-                        curr_slope[p] > slope_stepsize:
-                            slope_new[p] = curr_slope[p] - slope_stepsize
-                            change_slope = True
-                if not change_slope:
-                    halt_during_iter = True
-                    break
-
-            # evaluate mutual information
-            if (k+1)%EVAL_STEPS == 0 or k == MAX_ITER -1 or halt_during_iter:
-                if USE_MC:
-                    mean_new = mc_mean_grad_noncyclic(
-                        tmpgrad, curr_x, weight_new, self.conv, self.tau, MC_ITER_BA, NUM_THREADS)
+            # ------Monte Carlo based Arimoto Interation for updating the weights------                        
+            curr_time = time.time()
+            slope = np.zeros(self.numNeuro)
+            new_prob_vec = curr_weight.copy()
+            for k in range(curr_ba_iter_steps):    
+                new_coeff = np.zeros(self.numBin)                    
+                if self.model == 'Poisson':
+                    ba_iter_func(
+                        new_coeff, curr_tuning, new_prob_vec,
+                        slope, self.conv, self.tau, 
+                        curr_ba_batch_size, my_num_threads = self.num_threads)
                 else:
-                    mean_new = partial_sum_mean_grad_noncyclic(
-                        tmpgrad, curr_x, weight_new, self.conv, self.tau, SUM_THRESHOLD_BA, NUM_THREADS)
-                if PRINT:
-                    info_str = '%.2e'%capacity_gap
-                    if change_slope: #np.any(np.fabs(slope_new - curr_slope) > 1e-4):
-                        info_str += ' S ' # slope change
-                    curr_avg = np.dot(curr_x, curr_weight)
-                    print('{0:4d}   {1: 3.6f} {2:15s}{3:6s}'.format(curr_num_iter,mean_new, ' ', info_str)
-                          + str(curr_avg)
-                         )
+                    ba_iter_func(
+                        new_coeff, curr_tuning, new_prob_vec, 
+                        curr_inv_cov_mat, 
+                        slope, self.conv, self.tau, 
+                        curr_ba_batch_size, my_num_threads = self.num_threads)
+                new_prob_vec *= new_coeff
+                new_prob_vec /= np.sum(new_prob_vec)
+
+            spent_time2 = time.time() - curr_time
+            self.time_list.append(spent_time2)
+
+            curr_weight = new_prob_vec.copy()
+            self.tuning_list.append(curr_tuning.copy())
+            self.weight_list.append(curr_weight.copy())
+            self.mark_list.append('ba')
+            
+            # ------save results------   
+            self.sgd_learning_rate_list +=[curr_sgd_learning_rate, curr_sgd_learning_rate]
+            self.sgd_batch_size_list += [curr_sgd_batch_size, curr_sgd_batch_size]
+            self.ba_batch_size_list += [curr_ba_batch_size, curr_ba_batch_size]
+            self.laplacian_coeff_list += [curr_laplacian_coeff, curr_laplacian_coeff]
+            self.sgd_iter_steps_list += [curr_sgd_iter_steps, 0]
+            self.ba_iter_steps_list += [0, curr_ba_iter_steps]
+            
+            self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+            
+            if num_iter%alter_compute_info == 0:
+                grad_tc = np.zeros_like(curr_tuning)
+                if self.model=='Poisson':
+                    info_tc = mc_iter_func(
+                        grad_tc, curr_tuning, curr_weight, 
+                        self.conv, self.tau, 
+                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                else:
+                    info_tc = mc_iter_func(
+                        grad_tc, curr_tuning, curr_weight, 
+                        self.inv_cov_mat,
+                        self.conv, self.tau, 
+                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                if print_info:
+                    print(num_iter, curr_sgd_batch_size, info_tc, spent_time1, spent_time2)
+                self.info_list += [info_tc, info_tc]
+                self.grad_list += [grad_tc.copy(), grad_tc.copy()]
             else:
-                mean_new = None
-                tmpgrad = None
-            # save results
-            self.res_list['x'].append(curr_x.copy())
-            self.res_list['grad'].append(tmpgrad.copy())
-            self.res_list['obj'].append(mean_new)
-            self.res_list['success'].append(1)
-            self.res_list['status'].append(1)
-            self.res_list['nfev'].append(1)
-            self.res_list['njev'].append(1)
-            self.res_list['weight'].append(curr_weight.copy())
-            self.res_list['slope'].append(curr_slope.copy())
-            curr_weight = weight_new.copy()
-            curr_slope = slope_new.copy()
-            curr_num_iter += 1
+                self.info_list += [None, None]
+                self.grad_list += [None, None]
+
+            if plot_live and num_iter%alter_plot_live==0:
+                for i in range(self.numNeuro):
+                    live_ax_list[i].clear()
+                    xx, yy = pc_fun_weights(curr_tuning[i,:], curr_weight)
+                    live_ax_list[i].plot(xx, yy)
+                    live_ax_list[i].set_ylim([self.fm-0.1, self.fp+0.1])
+        #         time.sleep(0.1)
+                live_fig.canvas.draw()
+        
+                
+        # update current tuning, weight, grad, info, res_len
+        self.tuning = self.tuning_list[-1].copy() 
+        self.weight = self.weight_list[-1].copy() 
+        self.grad = self.grad_list[-1].copy() 
+        self.info = self.info_list[-1]
+        self.res_len = len(self.tuning_list)
+        
+    
+    def check_list_len(self):
+        # 13 lists same as self.res_len?
+        print(len(self.tuning_list), len(self.weight_list), len(self.info_list), \
+              len(self.grad_list), len(self.inv_cov_list), len(self.time_list), len(self.mark_list), \
+              len(self.sgd_learning_rate_list), len(self.sgd_iter_steps_list), len(self.sgd_iter_steps_list), \
+              len(self.ba_batch_size_list), len(self.ba_iter_steps_list), len(self.laplacian_coeff_list), \
+              self.res_len, 
+              )
+
+    def reset(self, pos):
+        # reset the lists at the given position
+        # pos must be >= 0. if pos>=self.res_len, then do not reset.
+        m = pos + 1
+        self.tuning_list = self.tuning_list[0:m]
+        self.weight_list = self.weight_list[0:m]
+        self.info_list = self.info_list[0:m]
+        self.grad_list = self.grad_list[0:m]
+        self.time_list = self.time_list[0:m]
+        self.mark_list = self.mark_list[0:m]
+        
+        self.sgd_learning_rate_list = self.sgd_learning_rate_list[0:m]
+        self.sgd_batch_size_list = self.sgd_batch_size_list[0:m]
+        self.sgd_iter_steps_list = self.sgd_iter_steps_list[0:m]
+        self.ba_batch_size_list = self.ba_batch_size_list[0:m]
+        self.ba_iter_steps_list = self.ba_iter_steps_list[0:m]
+        self.laplacian_coeff_list = self.laplacian_coeff_list[0:m]
+        self.inv_cov_list = self.inv_cov_list[0:m]
+
+        self.tuning = self.tuning_list[-1].copy()
+        self.weight = self.weight_list[-1].copy()
+        self.grad = self.grad_list[-1].copy()
+        self.info = self.info_list[-1]
+        self.res_len = len(self.tuning_list)
 
         
-        # save result list by default
-        self.res_len = len(self.res_list['x'])
-        if halt_during_iter:
-            self.res_list['num_iter'].append(k) # actual number of iterations = k
+    def take_res_id(self, pos):
+        # pos must be in [0, self.len-1]
+        if self.tuning_list[pos] is not None:
+            tc = TuningCurve_Noncyclic(self.model, self.tuning_list[pos], self.weight_list[pos],
+                                       inv_cov_mat=self.inv_cov_list[pos],
+                                       conv=self.conv, tau=self.tau,
+                                       info=self.info_list[pos],
+                                       grad=self.grad_list[pos], 
+                                       num_threads=self.num_threads,
+                                      )
+            return tc
         else:
-            self.res_list['num_iter'].append(MAX_ITER)
-        self.res_list['inter_steps'].append(1) # actual inter_steps taken.
-        self.res_list['NUM_THREADS'].append(NUM_THREADS)
-        self.res_list['USE_MC'].append(USE_MC)
-        self.res_list['MC_ITER_INFO'].append(0)
-        self.res_list['MC_ITER_GRAD'].append(0)
-        self.res_list['SUM_THRESHOLD_INFO'].append(0)
-        self.res_list['SUM_THRESHOLD_GRAD'].append(0)
-        if USE_MC:
-            self.res_list['MC_ITER_BA'].append(MC_ITER_BA)
-            self.res_list['SUM_THRESHOLD_BA'].append(0)
+            raise Exception('No result at index = %d!'%pos)
+    
+    #=========Plotting functions=========             
+    def plot_res_id(self, pos, **kwargs):
+        '''Plot the tuning curve at the given index. See TuningCurve_Noncyclic.plot for keyword arguments.'''
+        tc = self.take_res_id(pos)
+        tc.plot(**kwargs)
+        
+                  
+    def plot_info(self, alternate=False, color_sgd='r', color_ba='b'):
+        #plot_info(self, ax, alternate=False, color_sgd='r', color_ba='b'):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        if alternate:
+            self.__class__.plot_info_alternate(ax, 
+                                               self.info_list, self.mark_list, index_list=None, 
+                                               color_sgd=color_sgd, color_ba=color_ba)
         else:
-            self.res_list['MC_ITER_BA'].append(0)
-            self.res_list['SUM_THRESHOLD_BA'].append(SUM_THRESHOLD_BA)
-        if FILE_NAME != "" or ADD_TIME == True:
-            self.save_res_list(FILE_NAME, ADD_TIME)
+            ax.plot(self.info_list)
             
+    def plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000,
+                       dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
+                       INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, # options for non-cube animation
+                       INCLUDE_WEIGHT=True,# option for both
+                       **kwargs,# options for cube animation
+                       ):
+        '''Older version'''
+        tc_list = []
+        # evaluate all the mutual information for every tuning curve during iterations
+        index_list = []
+        for i in range(self.res_len):
+            if self.info_list[i] is not None:
+                tc = TuningCurve_Noncyclic(self.model, self.tuning_list[i], self.weight_list[i],
+                                           inv_cov_mat=self.inv_cov_list[i],
+                                           conv=self.conv, tau=self.tau,
+                                           info=self.info_list[i],
+                                           grad=self.grad_list[i], 
+                                           num_threads=self.num_threads,
+                                          )
+                tc_list.append(tc)
+                index_list.append(i)
+        anim = TuningCurve_Noncyclic.animation_tc_list(
+            tc_list, FILE_NAME, ADD_TIME, FP = self.fp_vec, FM = self.fm_vec, 
+            interval= interval, dt = dt,
+            index_list = index_list, 
+            XTICKS_IDX_LIST = XTICKS_IDX_LIST, VAR_LABEL =  "",
+            VAR_TXT_LIST = [], ALIGN = ALIGN, INCLUDE_RATE = INCLUDE_RATE,
+            INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO,
+        )
+        return anim
+    
+    def plot_animation_cube(self,
+                            path_vec_list=None,
+                            color_arr_list=None,
+                            radius=1, min_radius=0,
+                            INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                            FILE_NAME="", ADD_TIME=True,
+                            interval=1000,
+                            **kwargs,
+                           ):
+        '''See tuning.anim_3dcube gen_mixed_anim for keyword arguments'''
 
-    def save_res_list(self, FILE_NAME = "", ADD_TIME = True):
-        if ADD_TIME:
+        anim = gen_mixed_anim(self.tuning_list, 
+                              weights_list=self.weight_list, 
+                              info_list=self.info_list,
+                              path_vec_list=path_vec_list,
+                              color_arr_list=color_arr_list,
+                              radius=radius, min_radius=min_radius,
+                              INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT, 
+                              INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
+                              FILE_NAME=FILE_NAME, ADD_TIME=ADD_TIME,
+                              interval=interval,
+                              **kwargs,
+                             )
+        return anim
+        
+    #=========Save and load results========= 
+    
+    
+    def save_res_dict(self, file_name="", add_time=True):
+        # save attributes
+        res_dict = {}
+        res_dict['model'] = self.model
+        res_dict['conv'] = self.conv
+        res_dict['tau'] = self.tau
+        res_dict['num_threads'] = self.num_threads
+        res_dict['fp'] = self.fp
+        res_dict['fm'] = self.fm
+        res_dict['fp_vec'] = self.fp_vec
+        res_dict['fm_vec'] = self.fm_vec
+        res_dict['laplacian_2d'] = self.laplacian_2d
+        res_dict['laplacian_shape'] = self.laplacian_shape
+        res_dict['weighted_laplacian'] = self.weighted_laplacian
+        
+        # save lists
+        res_dict['tuning'] = self.tuning_list
+        res_dict['weight'] = self.weight_list
+        res_dict['grad'] = self.grad_list
+        res_dict['info'] = self.info_list
+        res_dict['inv_cov'] = self.inv_cov_list # for gaussian
+        
+        res_dict['mark'] = self.mark_list
+        res_dict['time'] = self.time_list
+
+        res_dict['sgd_learning_rate'] = self.sgd_learning_rate_list
+        res_dict['sgd_batch_size'] = self.sgd_batch_size_list
+        res_dict['sgd_iter_steps'] = self.sgd_iter_steps_list
+        res_dict['ba_batch_size'] = self.ba_batch_size_list
+        res_dict['ba_iter_steps'] = self.ba_iter_steps_list
+        res_dict['laplacian_coeff'] = self.laplacian_coeff_list
+        
+        if add_time:
             timestr = time.strftime("%m%d-%H%M%S")
         else:
             timestr = ""
-        # e.g.filename = 'data1/test1/Pop=%d_1'%numNeuro
-        filename = FILE_NAME + timestr
+        # e.g.filename = 'data1/test1/Pop=%d_1'%numPop
+        longfilename = file_name + timestr
         # self.FILE_NAME = filename             
-        directory = os.path.dirname(filename)
+        directory = os.path.dirname(longfilename)
         if directory != '':
             try:
                 os.stat(directory)
             except:
-                os.makedirs(directory)    
-        np.save(filename,self.res_list)
-    
-    def plot_res_id(self, i, ALL = True):
-        # plot the i-th tuning curve in the  res_list
-        if self.res_list['obj'][i] is not None:
-            tuning_curve = TuningCurve_Noncyclic(self.res_list['x'][i], self.res_list['weight'][i],\
-                                                 self.conv, self.tau,\
-                                                 self.res_list['obj'][i], self.res_list['grad'][i])
-        else:
-            tuning_curve = TuningCurve_Noncyclic(self.res_list['x'][i], self.res_list['weight'][i],\
-                                                 self.conv, self.tau)
-        tuning_curve.plot(ALL)
-        
-        
-        
-    def plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000, IF_CUBE = False, EVALUATE_ALL = False,
-                       dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
-                       INCLUDE_RATE = False, INCLUDE_GRAD = False, INCLUDE_INFO = True, # options for non-cube animation
-                       INCLUDE_WEIGHT=True,# option for both
-                       INCLUDE_FUN = True, INCLUDE_WEIGHT_BAR = True, # options for cube animation
-                       **kwargs,# options for cube animation
-                       ):
-        tc_list = []
-        # evaluate all the mutual information for every tuning curve during iterations
-        for i in range(self.res_len):
-            if self.res_list['obj'][i] is not None:
-                tc = TuningCurve_Noncyclic(self.res_list['x'][i], self.res_list['weight'][i],\
-                                           self.conv, self.tau,\
-                                           self.res_list['obj'][i], self.res_list['grad'][i])
-                tc_list.append(tc)
-            elif EVALUATE_ALL:
-                tc = TuningCurve_Noncyclic(self.res_list['x'][i], self.res_list['weight'][i],\
-                                           self.conv, self.tau)
-                tc_list.append(tc)
-        # saving tc_list?
-        
-        steps_list = []
-        pos = 0
-        num_iter = self.res_list['num_iter']
-        for i in range(1, len(num_iter)):
-            steps_list += list(np.arange(pos, pos+num_iter[i], self.res_list['inter_steps'][i]))
-            pos += num_iter[i]
-        steps_list += [pos]
-        steps_list = np.array(steps_list)
-        if not EVALUATE_ALL:
-            info_arr = np.array(self.res_list['obj'])
-            steps_list = steps_list[info_arr != None]
-    
-        if IF_CUBE:
-            anim = TuningCurve_Noncyclic.animation_tc_list_cube(
-                tc_list, FILE_NAME = FILE_NAME, ADD_TIME = ADD_TIME, interval = interval,
-                INCLUDE_FUN = INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
-                INCLUDE_WEIGHT_BAR = INCLUDE_WEIGHT_BAR,
-                **kwargs,
-            )
-        else:
-            anim = TuningCurve_Noncyclic.animation_tc_list(
-                tc_list, FILE_NAME, ADD_TIME, FP = self.fp, FM = self.fm, interval= interval, dt = dt,
-                index_list = list(steps_list), XTICKS_IDX_LIST = XTICKS_IDX_LIST, VAR_LABEL =  "",
-                VAR_TXT_LIST = [], ALIGN = ALIGN, INCLUDE_RATE = INCLUDE_RATE,
-                INCLUDE_GRAD = INCLUDE_GRAD, INCLUDE_INFO = INCLUDE_INFO, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
-            )
-        return anim
-
-        
-        
-    def plot_info(self, TITLE = "", marker = '.'):
-        steps_list = []
-        pos = 0
-        num_iter = self.res_list['num_iter']
-        for i in range(1, len(num_iter)):
-            steps_list += list(np.arange(pos, pos+num_iter[i], self.res_list['inter_steps'][i]))
-            pos += num_iter[i]
-        steps_list += [pos]
-        steps_list = np.array(steps_list)
-        info_arr = np.array(self.res_list['obj'])
-        plt.plot(steps_list[info_arr!=None], info_arr[info_arr !=None], marker = marker)
-        plt.xlabel('number of steps')
-        plt.ylabel('Mutual Information')
-        plt.title(TITLE)
-        
+                os.makedirs(directory)
+        np.save(longfilename, res_dict)
         
     @staticmethod 
-    def load_res_list(filename):
+    def load_res_dict(file_name):
         """
-        Load res_list of a TuningCurveOptimizer_Noncyclic Object
+        Load res_dict of a TuningCurveOptimizer_Noncyclic Object
+        (filename including '.npy')
         return a TuningCurveOptimizer_Noncyclic Object
         """
         
+        res_dict = np.load(file_name, allow_pickle=True, encoding = 'latin1').item()
+                
+        tc_init = TuningCurve_Noncyclic(
+            res_dict['model'], 
+            res_dict['tuning'][0],
+            res_dict['weight'][0], 
+            inv_cov_mat=res_dict['inv_cov'][0],
+            conv=res_dict['conv'], 
+            tau=res_dict['tau'],
+            info=res_dict['info'][0], 
+            grad=res_dict['grad'][0],
+            num_threads=res_dict['num_threads'])
         
-        res_list = np.load(filename+'.npy', allow_pickle=True).item()
+        tc_opt = TuningCurveOptimizer_Noncyclic(res_dict['model'], tc_init, res_dict['fp_vec'], 
+                                                res_dict['fm_vec'])       
         
-        tc = TuningCurve_Noncyclic(res_list['x'][0], res_list['weight'][0], res_list['conv'], res_list['tau'], \
-                                   res_list['obj'][0], res_list['grad'][0]) 
+        # copy lists
+        tc_opt.tuning_list = copy.copy(res_dict['tuning']) # or copy.deepcopy()
+        tc_opt.weight_list = copy.copy(res_dict['weight'])
+        tc_opt.info_list = copy.copy(res_dict['info'])
+        tc_opt.grad_list = copy.copy(res_dict['grad'])
+
+        tc_opt.inv_cov_list = copy.copy(res_dict['inv_cov'])
+
+        tc_opt.time_list = copy.copy(res_dict['time'])
+        tc_opt.mark_list = copy.copy(res_dict['mark'])
+        tc_opt.sgd_learning_rate_list = copy.copy(res_dict['sgd_learning_rate']) 
+        tc_opt.sgd_batch_size_list = copy.copy(res_dict['sgd_batch_size'])
+        tc_opt.sgd_iter_steps_list = copy.copy(res_dict['sgd_iter_steps'])
+        tc_opt.ba_batch_size_list = copy.copy(res_dict['ba_batch_size'])
+        tc_opt.ba_iter_steps_list = copy.copy(res_dict['ba_iter_steps'])
+        tc_opt.laplacian_coeff_list = copy.copy(res_dict['laplacian_coeff'])
         
-        tc_opt = TuningCurveOptimizer_Noncyclic(tc, res_list['fp'], res_list['fm'])
+        # current tuning, weight, grad, info and other attributes
+        tc_opt.tuning = res_dict['tuning'][-1].copy()   
+        tc_opt.weight = res_dict['weight'][-1].copy()   
+        tc_opt.grad = res_dict['grad'][-1].copy()   
+        tc_opt.info = res_dict['info'][-1]
         
-        tc_opt.res_list = res_list.copy()
-        tc_opt.res_len = len(res_list['x'])
+        tc_opt.res_len = len(res_dict['info']) # result list length
+        tc_opt.laplacian_2d = res_dict['laplacian_2d']
+        tc_opt.laplacian_shape = res_dict['laplacian_shape']
+        tc_opt.weighted_laplacian = res_dict['weighted_laplacian']
         return tc_opt
+    
+    @staticmethod
+    def plot_info_alternate(ax, info_list, mark_list, index_list=None, color_sgd = 'r', color_ba = 'b'):
+        if index_list is None:
+            index_list = np.arange(len(info_list))
+        else:
+            index_list = np.array(index_list)
+
+        sgd_idx = [i for i in index_list if mark_list[i]=='sgd']
+        bandit_idx = [i for i in index_list if mark_list[i]=='ba']
+
+        #plt.figure(figsize=(16,8))
+        for idx in sgd_idx:
+            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_sgd)
+
+        for idx in bandit_idx:
+            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_ba)
