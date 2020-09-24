@@ -1,37 +1,57 @@
 import time, sys, os, copy
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 from matplotlib import animation
-from tuning.cyMINoncyclic import *
-from tuning.anim_3dcube import *
+from tuning.cyMINoncyclic import mc_mean_grad_noncyclic # poisson model
+from tuning.cyMINoncyclic import mc_mean_grad_gaussian, mc_mean_grad_gaussian_inhomo, \
+mc_mean_grad_gaussian_inhomo_no_corr # gaussian models
+from tuning.anim_3dcube import plot_funcs_in_figure, gen_mixed_plots, gen_mixed_anim, \
+plot_funcs_bars_in_figure, plot_funcs_circles_in_figure
 
 class TuningCurve_Noncyclic:
     """TuningCurve Class (one or multi-population)
-    # Poisson Distribution
+    # Poisson/Gaussian Distribution (different models)
     Attributes:
         numNeuro, numBin, tuning, weight, conv, tau
-        info, grad, rate, average
+        info, grad, 
     Methods:
-        __init__(self,
-                 tuning, # tuning curve with size numNeuro*numBin
-                 weight, # length of each bin (interval)   
-                 conv = None, # convolution kernel                               
-                 tau = 1.0, # tau
-                 info = None, # mutual information I(r,theta)
-                 grad = None,  # gradient of I (minus gradient of -I)
-                 USE_MC = True, # flag indicating whether using MC for computation
-                 MC_ITER = 1e5, # number of iterations for computing info and grad using MC method,
-                 SUM_THRESHOLD = 50, # number of terms for computing info and grad using partial sum,
-                 NUM_THREADS = 8, # number of threads for computing info and grad using MC or partial sum.
-                 )
-        compute_info_grad(self, 
-                          USE_MC = True, # flag indicating whether using MC for computation
-                          MC_ITER = 1e5, # number of iterations for computing info and grad using MC method,
-                          SUM_THRESHOLD = 50, # number of terms for computing info and grad using partial sum,
-                          NUM_THREADS = 8, # number of threads for computing info and grad using MC or partial sum.
+       __init__(self,
+                model, #'Poisson', 'GaussianHomo', 'GaussianInhomo', 'GaussianInhomoNoCorr' 
+                tuning, # tuning curve with size numNeuro*numBin
+                weight, # length of each bin (interval)   
+                inv_cov_mat = None, # inverse covariance matrix for Gaussian Models (different shapes required)
+                conv = None, # convolution kernel                               
+                tau = 1.0, # tau
+                info = None, # mutual information I(r,theta)
+                grad = None,  # gradient of I (minus gradient of -I)                 
+                mc_iter = 1e5, # number of iterations for computing info and grad using MC method,
+                num_threads = 8, # number of threads for computing info and grad using MC.
+                ):
+        compute_info_grad(self,
+                          mc_iter = 1e5, # number of iterations for computing info and grad using MC method,
+                          num_threads = 8, # number of threads for computing info and grad using MC.
                           )
-        plot(self, ALL = True)
+        plot(self, fig=None, 
+             nrow=None, ncol=None, fp=None, fm=None, 
+             data_axis = 0, path_vec = None, 
+             )
+             
+        plot_bars(self, fig=None, 
+                  nrow=None, ncol=None, 
+                  fp=None, fm=None, 
+                  path_vec=None, 
+                  num_colors=21, cmap_name ='jet', add_colorbar=True,
+                  **kwargs,
+                 )
+        plot_circles(self, grid_shape, fig=None, 
+                     nrow=None, ncol=None, 
+                     fp=None, fm=None,
+                     path_vec=None, 
+                     num_colors=21, cmap_name='jet', add_colorbar=True,
+                     max_point_size=300,
+                     **kwargs,
+                    )
+        plot_all() # old version of plot
         __copy__(self) # useage: copy.copy(tuning_curve_instance)
     Static Methods:
         # Usage: TuningCurve_Noncyclic.animation_tc_list(...)
@@ -57,166 +77,296 @@ class TuningCurve_Noncyclic:
            
     """
     def __init__(self,
-                 tuning, # tuning curve with size numNeuro*numBin
-                 weight, # length of each bin (interval)   
+                 model, #'Poisson', 'GaussianHomo', 'GaussianInhomo', 'GaussianInhomoNoCorr' 
+                 tuning, # tuning curve with size (numNeuro, numBin)
+                 weight, # weights with size (numBin, )
+                 inv_cov_mat = None, # inverse covariance matrix for Gaussian Models (different shapes required)
                  conv = None, # convolution kernel                               
                  tau = 1.0, # tau
                  info = None, # mutual information I(r,theta)
-                 grad = None,  # gradient of I (minus gradient of -I)
-                 USE_MC = True, # flag indicating whether using MC for computation
-                 MC_ITER = 1e5, # number of iterations for computing info and grad using MC method,
-                 SUM_THRESHOLD = 50, # number of terms for computing info and grad using partial sum,
-                 NUM_THREADS = 8, # number of threads for computing info and grad using MC or partial sum.
+                 grad = None,  # gradient of I (minus gradient of -I)                 
+                 mc_iter = 1e5, # number of iterations for computing info and grad using MC method,
+                 num_threads = 8, # number of threads for computing info and grad using MC or partial sum.
                 ):
+        '''Note:
+        Different shapes for inv_cov_mat in different models:
+        Poisson: inv_cov_mat is None
+        GaussianHomo: inv_cov_mat: (numNeuro, numNeuro)
+        GaussianInhomo: inv_cov_mat: (numNeuro, numNeuro, numBin)
+        GaussianInhomoNoCorr: inv_cov_mat: (numNeuro, numBin)
+        (in this case it is 'inv_cov_diag' argument in 'mc_mean_grad_gaussian_inhomo_no_corr')
         
+        '''
+        if model not in ['Poisson', 'GaussianHomo', 'GaussianInhomo', 'GaussianInhomoNoCorr']:
+            raise Exception('Wrong input for the model!')
+        if model in ['GaussianHomo', 'GaussianInhomo', 'GaussianInhomoNoCorr'] and inv_cov_mat is None:
+            raise Exception('Missing input for the inverse covariance matrix of Gaussian model!')
+            
         tuning = np.array(tuning)
         if len(tuning.shape) ==1:
             # tuning is a (numBin,) type array
             tuning = tuning.reshape((1,tuning.size))
-        if np.any(tuning <0):
+        if np.any(tuning < 0):
             raise Exception('Wrong input for tuning function!')
-        if weight.size != tuning.shape[1] or np.any(weight < 0) or np.fabs(np.sum(weight) - 1.0)>1e-4:
-            raise Exception('Wrong input for weights!')
         # hard to constrain on convolution now...
         if conv is None:
             conv = np.zeros(tuning.shape[1])
             conv[0] = 1
         if np.fabs(np.sum(conv) -1)>1e-5:
-            raise Excpetion('Wrong input for convolution kernel! Must sum up to one.')
+            raise Exception('Wrong input for convolution kernel! Must sum up to one.')        
         
-
+        self.model = model
         self.numNeuro = tuning.shape[0]
         self.numBin = tuning.shape[1]
         self.tuning = tuning.copy() 
         self.weight = np.array(weight).copy()
         self.conv = np.array(conv).copy()
-        self.tau = tau
-
+        self.tau = tau        
         
+        # check inverse covarainace matrix shapes for Gaussian Model
+        if model == 'GaussianHomo' and inv_cov_mat.shape != (self.numNeuro, self.numNeuro):
+            raise Exception('Wrong shape for the inverse covariance matrix of Gaussian Homogeneous model! \
+            Must be (numNeuro, numNeuro).')       
+        if model == 'GaussianInhomo' and inv_cov_mat.shape != (self.numNeuro, self.numNeuro, self.numBin):
+            raise Exception('Wrong shape for the inverse covariance matrix of Gaussian Inhomogeneous model! \
+            Must be (numNeuro, numNeuro, numBin).')  
+            # inv_cov_mat[:,:,j] is the inverse covariance matrix of p(r|theta_j)
+        if model == 'GaussianInhomoNoCorr' and inv_cov_mat.shape != (self.numNeuro, self.numBin):
+            raise Exception('Wrong shape for the inverse covariance matrix of Gaussian Inhomogeneous model \
+            with no correlations! Must be (numNeuro, numBin).')  
+            #inv_cov_mat[:,j] contains the diagonal entries of the inverse covariance matrix of p(r|theta_j) 
+        
+        if model != 'Poisson':
+            self.inv_cov_mat = inv_cov_mat.copy()
+         
         if info is None or grad is None:
-            self.compute_info_grad(USE_MC, MC_ITER, SUM_THRESHOLD, NUM_THREADS)
+            self.compute_info_grad(mc_iter, num_threads)
         else:
             self.info = info
             self.grad = grad.copy()
-      
+
         
-        rate = np.zeros_like(tuning)
-        for i in range(self.numNeuro):
-            for j in range(self.numBin):
-                for k in range(self.numBin):
-                    rate[i,j] += tuning[i, (self.numBin+j-k) % self.numBin]*conv[k]
-                rate[i,j] = tau*rate[i,j]
-        self.rate = rate # corresponding rate curve after convolution
-        
-        self.average = np.dot(tuning, weight) # integral average
+        #self.average = np.average(tuning, axis = 1) # integral average
         #self.num_iter = 0 # number of iterations
         
     def compute_info_grad(self,
-                          USE_MC = True, # flag indicating whether using MC for computation
-                          MC_ITER = 1e5, # number of iterations for computing info and grad using MC method,
-                          SUM_THRESHOLD = 50, # number of terms for computing info and grad using partial sum,
-                          NUM_THREADS = 8, # number of threads for computing info and grad using MC or partial sum.
+                          mc_iter = 1e5, # number of iterations for computing info and grad using MC method,
+                          num_threads = 8, # number of threads for computing info and grad using MC or partial sum.
                           ):
         """
         Compute mutual information and gradient of mutual information.
         (Since not for optimization purporses, +I and +gradI.)
-        Can choose to apply Monte Carlo or partial sum.
         NUM_ITER: number of iterations in monte carlo method
-        SUM_THRESHOLD: number of terms included in the partial sum
         """
         grad0 = np.zeros((self.numNeuro, self.numBin))
-        if USE_MC:
+        if self.model == 'Poisson':
             mean0 = mc_mean_grad_noncyclic(grad0, self.tuning, self.weight, 
                                            self.conv, self.tau, 
-                                           MC_ITER, NUM_THREADS)
-        else:
-            mean0 = partial_sum_mean_grad_noncyclic(grad0, self.tuning, self.weight, 
-                                             self.conv, self.tau,
-                                             SUM_THRESHOLD, NUM_THREADS)
-        
+                                           mc_iter, num_threads)
+        elif self.model == 'GaussianHomo':
+            mean0 = mc_mean_grad_gaussian(grad0, self.tuning, self.weight, self.inv_cov_mat,
+                                           self.conv, self.tau, 
+                                           mc_iter, num_threads)
+        elif self.model == 'GaussianInhomo':
+            mean0 = mc_mean_grad_gaussian_inhomo(grad0, self.tuning, self.weight, self.inv_cov_mat,
+                                                 self.conv, self.tau, 
+                                                 mc_iter, num_threads)
+        elif self.model == 'GaussianInhomoNoCorr':
+            mean0 = mc_mean_grad_gaussian_inhomo_no_corr(grad0, self.tuning, self.weight, 
+                                                         self.inv_cov_mat,
+                                                         self.conv, self.tau, 
+                                                         mc_iter, num_threads)            
+            
         self.grad = grad0.copy()
         self.info = mean0
+    
+    def compute_rate(self):
+        '''Compute the corresponding rate curve after convolution'''
+        rate = np.zeros((self.numNeuro, self.numBin))
+        for i in range(self.numNeuro):
+            for j in range(self.numBin):
+                for k in range(self.numBin):
+                    rate[i,j] += self.tuning[i, (self.numBin+j-k) % self.numBin]*self.conv[k]
+                rate[i,j] = self.tau*rate[i,j]
+        return rate 
+    
+    def plot(self, fig=None, 
+             nrow=None, ncol=None, fp=None, fm=None, 
+             data_axis=0, path_vec=None, 
+             ):
+        
+        '''
+        Plot tuning curves in subplots in grid (nrow, ncol).
+        Return the generated subplots' axes.
+        See details in tuning.anim_3dcube:plot_funcs_in_figure'''
+        if fig is None:
+            fig = plt.figure()
+        ax_list = plot_funcs_in_figure(fig, self.tuning, self.weight,
+                                       nrow=nrow, ncol=ncol, fp=fp, fm=fm,
+                                       path_vec=path_vec, data_axis=data_axis,
+                                       )
+        return ax_list
+    
+    def plot_bars(self, fig=None, 
+                  nrow=None, ncol=None, 
+                  fp=None, fm=None, 
+                  path_vec=None, 
+                  num_colors=21, cmap_name ='jet', add_colorbar=True,
+                  **kwargs,
+                 ):
+        '''Plot tuning curves in subplots in grid (nrow, ncol), as colored bar plots.
+        Return the generated subplots' axes (including the colorbar axis).
+        especially suitable for high dimensional data (numNeuro>3).
+        kwargs: same as usage in 'ax.plot'.
+        See details in tuning.anim_3dcube:plot_funcs_bars_in_figure
+        '''
+        if fig is None:
+            fig = plt.figure()
+        ax_list = plot_funcs_bars_in_figure(fig, self.tuning, self.weight,
+                                            nrow=nrow, ncol=ncol,
+                                            fp=fp, fm=fm, 
+                                            path_vec=path_vec,
+                                            num_colors=num_colors, cmap_nam=cmap_name, 
+                                            add_colorbar=add_colorbar,
+                                            **kwargs,
+                                           )
+        return ax_list
 
-    def plot(self, ALL = True):
-        # need to plot piecewise tuning curve according to weight lengths.
-        
-        
-        xtmp = np.cumsum(self.weight)        
+    def plot_circles(self, grid_shape, fig=None, 
+                     nrow=None, ncol=None, 
+                     fp=None, fm=None,
+                     path_vec=None, 
+                     num_colors=21, cmap_name='jet', add_colorbar=True,
+                     max_point_size=300,
+                     **kwargs,
+                    ):
+        '''Plot scattered circles whose areas equal to weights on 2d grid.
+        Return the generated subplots' axes (including the colorbar axis).
+        Used in 2d-input cases.
+        Require a grid_shape argument:  (nNeuro, nBin1, nBin2)
+        (same as self.laplacian in TuningCurveOptimizer_Noncyclic)
+        kwargs: same as usage in 'ax.scatter'.
+        See details in tuning.anim_3dcube:plot_funcs_circles_in_figure
+        '''
+        if fig is None:
+            fig = plt.figure()
+        ax_list = plot_funcs_circles_in_figure(fig, self.tuning, self.weight, grid_shape, 
+                                               nrow=nrow, ncol=ncol, 
+                                               fp=fp, fm=fm,
+                                               path_vec=path_vec, 
+                                               num_colors=num_colors,
+                                               color_map_name=cmap_name, 
+                                               add_colorbar=add_colorbar,
+                                               max_point_size=max_point_size,
+                                               **kwargs,
+                                              )
+        return ax_list
+
+    def plot_all(self):
+        '''Old version of plotting: including tuning curve, weights, rate curve, gradient separately'''
+        # plot tuning curve, weights, convolution, gradient separately.
+        xtmp = np.cumsum(self.weight)
         xx = [ [xtmp[j]]*2 for j in range(0, self.numBin-1) ]  
         xx = [0]+list(np.array(xx).reshape(-1)) + [1.0]
         yy = []
         yy_rate = []
         yy_grad = []
+        
+        rate = self.compute_rate()
         for p in range(self.numNeuro):
             yy_p = [ [self.tuning[p][i], self.tuning[p][i+1]] for i in range(0, self.numBin-1) ] 
             yy_p = [self.tuning[p][0]] + list(np.array(yy_p).reshape(-1)) + [self.tuning[p][-1]]
             
-            yy_rate_p = [ [self.rate[p][i], self.rate[p][i+1]] for i in range(0, self.numBin-1) ] 
-            yy_rate_p = [self.rate[p][0]] + list(np.array(yy_rate_p).reshape(-1)) + [self.rate[p][-1]]
-            yy_grad_p = [ [self.grad[p][i], self.grad[p][i+1]] for i in range(0, self.numBin-1) ] 
-            yy_grad_p = [self.grad[p][0]] + list(np.array(yy_grad_p).reshape(-1)) + [self.grad[p][-1]]
+            yy_rate_p = [ [rate[p][i], rate[p][i+1]] for i in range(0, self.numBin-1) ] 
+            yy_rate_p = [rate[p][0]] + list(np.array(yy_rate_p).reshape(-1)) + [rate[p][-1]]
+            yy_grad_p = [ [grad[p][i], self.grad[p][i+1]] for i in range(0, self.numBin-1) ] 
+            yy_grad_p = [grad[p][0]] + list(np.array(yy_grad_p).reshape(-1)) + [self.grad[p][-1]]
             
             yy.append(yy_p)
             yy_rate.append(yy_rate_p)
             yy_grad.append(yy_grad_p)
         color_list = ['steelblue',  'seagreen', 'crimson', 'gray', 'm','gold', 'k']*10 # incase no enough colors..
-        
-        
-        if ALL:
             
-            weight_max = np.max(self.weight)
-            fun_max = np.max(self.tuning)
-            fig = plt.figure(figsize = (16,8))
-            ax_tuning = fig.add_subplot(2,2,1, ylim = (-0.01, fun_max + 0.01))
-            ax_weight = fig.add_subplot(2,2,2, ylim = (-0.01, weight_max + 0.01))
-            ax_rate = fig.add_subplot(2,2,3,ylim = (-0.01*self.tau, (fun_max + 0.01)*self.tau))
-            ax_grad = fig.add_subplot(2,2,4)
-            
-            for p in range(self.numNeuro):
-                ax_tuning.plot(xx, yy[p], lw = 1.5, color = color_list[p])
-                # ax_tuning.plot(self.tuning[i])
-            leg = ax_tuning.legend([r'$MI$ = %.4f'%(self.info)], handlelength=0, handletextpad=0, \
-                             fancybox = True, loc = 'center right', bbox_to_anchor=(-0.05,0.5), fontsize = 15)
-            for item in leg.legendHandles:
-                item.set_visible(False)
-            ax_tuning.set_title('Tuning Curve with %d neurons, %d bins'%(self.numNeuro,self.numBin))
-            
-            ax_weight.plot(self.weight, color = 'gray', lw = 1.5)
-            ax_weight.set_title('Weights')
-           
-            for p in range(self.numNeuro):
-                ax_rate.plot(xx, yy_rate[p],lw = 1.5, color = color_list[p],\
-                             label = r'$\bar{f_{%d}}$ = %.2f'%(p,self.average[p]))
-            ax_rate.set_title('Rate Curve')
-            if self.numNeuro ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.2f'%self.average], loc='center right', \
-                           fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
-            else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(i,self.average[i]) for i in range(self.numNeuro)], \
-                           loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
-            
-            for p in range(self.numNeuro):
-                ax_grad.plot(xx, yy_grad[p],lw = 1.5, color = color_list[p], \
-                             label = r'$(\nabla I)_{%d}$'%p)
-            ax_grad.set_title('Gradient')
-            ax_tuning.grid()
-            ax_weight.grid()
-            ax_rate.grid()
-            ax_grad.grid()
-            plt.show()
+        weight_max = np.max(self.weight)
+        fun_max = np.max(self.tuning)
+        fig = plt.figure(figsize = (16,8))
+        ax_tuning = fig.add_subplot(2,2,1, ylim = (-0.01, fun_max + 0.01))
+        ax_weight = fig.add_subplot(2,2,2, ylim = (-0.01, weight_max + 0.01))
+        ax_rate = fig.add_subplot(2,2,3,ylim = (-0.01*self.tau, (fun_max + 0.01)*self.tau))
+        ax_grad = fig.add_subplot(2,2,4)
+
+        for p in range(self.numNeuro):
+            ax_tuning.plot(xx, yy[p], lw = 1.5, color = color_list[p])
+            # ax_tuning.plot(self.tuning[i])
+        leg = ax_tuning.legend([r'$MI$ = %.4f'%(self.info)], handlelength=0, handletextpad=0, \
+                         fancybox = True, loc = 'center right', bbox_to_anchor=(-0.05,0.5), fontsize = 15)
+        for item in leg.legendHandles:
+            item.set_visible(False)
+        ax_tuning.set_title('Tuning Curve with %d neurons, %d bins'%(self.numNeuro,self.numBin))
+
+        ax_weight.plot(self.weight, color = 'gray', lw = 1.5)
+        ax_weight.set_title('Weights')
+
+        for p in range(self.numNeuro):
+            ax_rate.plot(xx, yy_rate[p],lw = 1.5, color = color_list[p],\
+                         label = r'$\bar{f_{%d}}$ = %.1f'%(p,self.average[p]))
+        ax_rate.set_title('Rate Curve')
+        if self.numNeuro ==1:
+            ax_rate.legend([r'$\bar{f}$ = %.1f'%self.average], loc='center right', \
+                       fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
         else:
-            # plot tuning curve only
-            plt.figure()
-            for p in range(self.numNeuro):
-                plt.plot(xx, yy[p], lw = 1.5, color = color_list[p],\
-                               label = r'$\bar{f_{%d}}$ = %.2f'%(p,self.average[p]))
+            ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(i,self.average[i]) for i in range(self.numNeuro)], \
+                       loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
+
+        for p in range(self.numNeuro):
+            ax_grad.plot(xx, yy_grad[p],lw = 1.5, color = color_list[p], \
+                         label = r'$(\nabla I)_{%d}$'%p)
+        ax_grad.set_title('Gradient')
+        ax_tuning.grid()
+        ax_weight.grid()
+        ax_rate.grid()
+        ax_grad.grid()
+        plt.show()            
+
+    def plot_3dcube(self, 
+                    path_vec=None,
+                    color_arr=None,
+                    radius=1, min_radius=0,
+                    INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                    FILE_NAME="", ADD_TIME=False,# figure not saved if both FILE_NAME="" and ADD_TIME=False 
+                     **kwargs, #kwargs in set_scatter_data_in_axis, set_data_in_figure.
+                   ):
+        '''See details in tuning.anim_3dcube gen_mixed_plots'''
+        if self.numNeuro!= 3:
+             raise Exception('Wrong dimension of tuning curve! The number of neurons must be 3.')
                 
-            plt.title('Tuning Curve with %d neurons, %d bins, MI = %.4f'%(self.numNeuro,self.numBin, self.info))
-            plt.legend(loc='center right', bbox_to_anchor=(0,0.5))
-            plt.grid()
-            plt.show()
+        figure_handles = gen_mixed_plots(self.tuning, weights=self.weight, info=self.info,
+                                         path_vec=path_vec,
+                                         color_arr=color_arr,
+                                         radius=radius, min_radius=min_radius,
+                                         INCLUDE_FUN=INCLUDE_FUN, 
+                                         INCLUDE_WEIGHT=INCLUDE_WEIGHT, 
+                                         INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
+                                         FILE_NAME=FILE_NAME, ADD_TIME=ADD_TIME,
+                                         **kwargs,
+                                        )
+        return figure_handles
+    
+
+    
+    def plot_hist(self, ax, neuro_id=None, bins=50):
+        '''Plot historgram of the tuning curve values with weights.
+        If neuro_id is None, then plot histogram of all tuning values (numNeuro*numBin), 
+        and for tuning[i,j] the weight will be weight[j]/numNeuro.'''
+        if neuro_id is None:
+            avg_weights = np.array(list(self.weight)*self.numNeuro)/self.numNeuro
+            ax.hist(self.tuning.reshape(-1), bins=bins, 
+                    weights = avg_weights)
+        else:
+            ax.hist(self.tuning[neuro_id,:], bins=bins, 
+                    weights = self.weight)
         
-    def __copy__(self):        
+    def __copy__(self):
         return TuningCurve_Noncyclic(self.tuning, self.weight, self.conv, self.tau, self.info, self.grad)
 
  
@@ -225,7 +375,7 @@ class TuningCurve_Noncyclic:
     def animation_tc_list_all(tc_list, FILE_NAME = "", ADD_TIME = True, FP = [], FM = [], \
                               XTICKS_IDX_LIST = [], VAR_LABEL =  "", VAR_TXT_LIST = [], \
                               index_list = [], interval=1000, color = False, dt = 1):
-        """Plot animation for a list of tuning curves. Same alignment as plot() function."""
+        """Old version: Plot animation for a list of tuning curves. Same alignment as plot() function."""
 
         test_num = len(tc_list)
         # check dimensions
@@ -291,8 +441,8 @@ class TuningCurve_Noncyclic:
         #         for k in range(numNeuro):
         #             FP[k]  = np.max(np.array([np.max(tc.tuning[k]) for tc in tc_list]))
         #             FM[k]  = np.min(np.array([np.min(tc.tuning[k]) for tc in tc_list]))        
-        rate_fp = np.max(np.array([np.max(tc.rate) for tc in tc_list]))
-        rate_fm = np.min(np.array([np.min(tc.rate) for tc in tc_list]))
+        rate_fp = np.max(np.array([tc.tau*np.max(tc.tuning) for tc in tc_list]))
+        rate_fm = np.min(np.array([tc.tau*np.min(tc.tuning) for tc in tc_list]))
         weight_max = np.max(np.array([np.max(tc.weight) for tc in tc_list]))
         
         fig = plt.figure(figsize = (16,8))        
@@ -357,7 +507,7 @@ class TuningCurve_Noncyclic:
             curr_idx = index_list[i] # (i*dt)%ll
             curr_tuning = tc_list[i].tuning
             curr_weight =  tc_list[i].weight
-            curr_rate = tc_list[i].rate
+            curr_rate = tc_list[i].compute_rate() #tc_listp[i].rate
             curr_grad = tc_list[i].grad
             curr_info = tc_list[i].info
             
@@ -421,10 +571,10 @@ class TuningCurve_Noncyclic:
                 item.set_visible(False)
                 
             if numNeuro ==1:
-                ax_rate.legend([r'$\bar{f}$ = %.2f'%tc_list[i].average], loc='center right', \
+                ax_rate.legend([r'$\bar{f}$ = %.1f'%tc_list[i].average], loc='center right', \
                            fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
             else:
-                ax_rate.legend([r'$\bar{f_{%d}}$ = %.2f'%(p,tc_list[i].average[p]) for p in range(numNeuro)], \
+                ax_rate.legend([r'$\bar{f_{%d}}$ = %.1f'%(p,tc_list[i].average[p]) for p in range(numNeuro)], \
                            loc='center right',fancybox = True,bbox_to_anchor=(-0.05,0.5), fontsize = 15)
                 
             
@@ -445,7 +595,7 @@ class TuningCurve_Noncyclic:
             except:
                 os.makedirs(directory)  
         anim.save(filename, writer="ffmpeg")
-        return anim
+        
         
                
     @staticmethod 
@@ -453,10 +603,9 @@ class TuningCurve_Noncyclic:
                           XTICKS_IDX_LIST = [], VAR_LABEL =  "", VAR_TXT_LIST = [], \
                           ALIGN = "row",\
                           INCLUDE_INFO = True, INCLUDE_RATE = False, INCLUDE_GRAD = False,\
-                          INCLUDE_WEIGHT = True,\
                           index_list = [], interval=1000, dt = 1):
         # ALIGN = "row" or "col" (default = row)
-        """Plot animation for a list of tuning curves. Showing each population in 
+        """Old version: Plot animation for a list of tuning curves. Showing each population in 
         separate subplots aligned in rows or columns. Not including weight function. """
 
         test_num = len(tc_list)
@@ -544,27 +693,32 @@ class TuningCurve_Noncyclic:
         var_texts = []
 
         grad_max = np.max(np.array([np.max(np.fabs(tc.grad)) for tc in tc_list]))
-        weight_max = np.max(np.array([np.max(tc.weight) for tc in tc_list]))
       
         tau = np.max(np.array([np.max(tc.tau) for tc in tc_list]))  
         colors = ['steelblue',  'seagreen', 'crimson', 'gray', 'm','gold', 'k']*10
         
         if ALIGN == "row":
             n_rows = numNeuro
-            n_cols = 1 + INCLUDE_RATE + INCLUDE_GRAD
+            n_cols = 1
+            if INCLUDE_RATE:
+                n_cols += 1
+            if INCLUDE_GRAD:
+                n_cols += 1
         else: #ALIGN == "col"
             n_cols = numNeuro
-            n_rows = 1 + INCLUDE_RATE + INCLUDE_GRAD
+            n_rows = 1
+            if INCLUDE_RATE:
+                n_rows += 1
+            if INCLUDE_GRAD:
+                n_rows += 1               
         if INCLUDE_INFO:
             n_cols += 1
-        if INCLUDE_WEIGHT:
-            n_rows += 1
             
-        rate_idx = 1
+        rate_idx = 2   
         if INCLUDE_RATE:
-            grad_idx = 2
+            grad_idx = 3
         else:
-            grad_idx = 1
+            grad_idx = 2
         #print n_rows, n_cols
         
         fig = plt.figure(figsize = (n_cols*6,n_rows*6)) #(numNeuro*10,3*6)
@@ -579,34 +733,23 @@ class TuningCurve_Noncyclic:
             ax_info.grid()
             ax_info.set_title('Mutual Information', fontsize = 14)
             line_info, = ax_info.plot([],[])
-
-        if INCLUDE_WEIGHT:
-            gs0 = gridspec.GridSpec(2, 2, width_ratios=[n_cols-1, 1], height_ratios = [n_rows-1,1])
-            ax_weight = fig.add_subplot(gs0[1,0])
-            if ALIGN == "row":
-                gs00 = gridspec.GridSpecFromSubplotSpec(numNeuro, (1 + INCLUDE_RATE + INCLUDE_GRAD),
-                                                        subplot_spec=gs0[0])
-            else: #ALIGN == "col"
-                gs00 = gridspec.GridSpecFromSubplotSpec((1 + INCLUDE_RATE + INCLUDE_GRAD),numNeuro,
-                                                        subplot_spec=gs0[0])
-        else:
-            gs00 = gridspec.GridSpec(1, 2, width_ratios=[n_cols-1, 1])
+        
         
         for k in range(numNeuro):
              # row or col alignment
             
             if ALIGN == "row":
-                ax1 = fig.add_subplot(gs00[k,0], xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))
+                ax1 = fig.add_subplot(n_rows, n_cols, n_cols*k+1, xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))        
                 if INCLUDE_RATE:
-                    ax2 = fig.add_subplot(gs00[k, rate_idx], xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
+                    ax2 = fig.add_subplot(n_rows, n_cols,n_cols*k+rate_idx , xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
                 if INCLUDE_GRAD:
-                    ax3 = fig.add_subplot(gs00[k, grad_idx], xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
+                    ax3 = fig.add_subplot(n_rows, n_cols, n_cols*k+grad_idx , xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
             else: #ALIGN == "col"
-                ax1 = fig.add_subplot(gs00[0,k], xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))
+                ax1 = fig.add_subplot(n_rows, n_cols, k+1, xlim = (0,1), ylim = (FM[k]-0.1*FP[k],FP[k]+0.1*FP[k]))        
                 if INCLUDE_RATE:
-                    ax2 = fig.add_subplot(gs00[rate_idx, k], xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
+                    ax2 = fig.add_subplot(n_rows, n_cols,n_cols+k+1 , xlim = (0,1), ylim=(tau*(FM[k]-0.1*FP[k]),tau*(FP[k]+0.1*FP[k])))
                 if INCLUDE_GRAD:
-                    ax3 = fig.add_subplot(gs00[grad_idx, k], xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
+                    ax3 = fig.add_subplot(n_rows, n_cols, (grad_idx-1)*n_cols+k+1 , xlim = (0,1), ylim=(-1.1*grad_max,1.1*grad_max))
 
             if k ==0:
                 ax1.set_title('Tuning Curve', fontsize = 14)
@@ -644,9 +787,7 @@ class TuningCurve_Noncyclic:
         else:
             infotxt = ax_tuning[0].text(0.02, 0.85, '', transform=ax_tuning[0].transAxes, fontsize = 16)
         
-        if INCLUDE_WEIGHT:
-            barcollection = ax_weight.bar(np.arange(numBin), tc_list[0].weight)
-            ax_weight.set_ylim(0,weight_max+0.05)
+        
         #if numBin>10 and numBin%2 ==0:
         #    numBinwidth = 2*int(numBin/10)
         #else:
@@ -722,7 +863,7 @@ class TuningCurve_Noncyclic:
             curr_tuning = tc_list[i].tuning
             curr_grad = tc_list[i].grad
             curr_info = tc_list[i].info
-            curr_rate = tc_list[i].rate
+            curr_rate =  tc_list[i].compute_rate() #tc_list[i].rate
             curr_weight = tc_list[i].weight
             
             xtmp = np.cumsum(curr_weight)        
@@ -732,9 +873,6 @@ class TuningCurve_Noncyclic:
             if INCLUDE_INFO:
                 line_info.set_data(index_list[0:i+1], info_list[0:i+1])
             infotxt.set_text('MI = %.4f' % curr_info)
-            if INCLUDE_WEIGHT:
-                for j, b in enumerate(barcollection):
-                    b.set_height(curr_weight[j])
 
             for p in range(numNeuro):
                 yy_p = [ [curr_tuning[p][j], curr_tuning[p][j+1]] for j in range(0, numBin-1) ] 
@@ -812,38 +950,44 @@ class TuningCurve_Noncyclic:
             except:
                 os.makedirs(directory)  
         anim.save(filename, writer="ffmpeg")
-        return anim
         
         
     @staticmethod 
-    def animation_tc_list_cube(tc_list,
-                               INCLUDE_FUN= True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
-                               FILE_NAME="", ADD_TIME=True, interval=1000,
+    def animation_tc_list_cube(tc_list, 
+                               path_vec_list=None,
+                               color_arr_list=None,
+                               radius=1, min_radius=0,
+                               INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
+                               FILE_NAME="", ADD_TIME=True,
+                               interval=1000,
                                **kwargs,
                               ):
-        '''
-        For details of the keyword arguments: see the doc of 'gen_mixed_anim' in 'anim_3dcube.py'.
-        '''
-        points_list = []
+        tuning_list = []
         weights_list = []
         info_list = []
+                    
+        for tc in tc_list:
+            tuning_list.append(tc.tuning)
+            weights_list.append(tc.weight)
+            info_list.append(tc.info)
 
-        test_num = len(tc_list)
-
-
-        for i in range(test_num):
-            if tc_list[i].numNeuro > 3:
-                raise Exception("Wrong dimension of tuning curve! Must be <=3 neurons.")
-            points_list.append(tc_list[i].tuning)
-            weights_list.append(tc_list[i].weight)
-            info_list.append(tc_list[i].info)
-
-        anim = gen_mixed_anim(points_list, weights_list, info_list,
-                              INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT,
+        anim = gen_mixed_anim(tuning_list, weights_list=weights_list, info_list=info_list,
+                              path_vec_list=path_vec_list,
+                              color_arr_list=color_arr_list,
+                              radius=radius, min_radius=min_radius,
+                              INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT, 
                               INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
                               FILE_NAME=FILE_NAME, ADD_TIME=ADD_TIME,
                               interval=interval,
                               **kwargs,
-                              )
+                             )
         return anim
-
+    
+    
+    #----------A helper function from sigma to homogenous Gaussian inverse covariance matrix
+    
+    @staticmethod
+    def sigma_to_inv_cov(sigma, nNeuro):
+        inv_cov_matrix = np.diag(1.0*np.ones(nNeuro)/sigma**2)
+        return inv_cov_matrix
+       
