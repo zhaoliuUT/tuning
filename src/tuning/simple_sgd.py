@@ -1,5 +1,7 @@
 import numpy as np
-from tuning.cyMINoncyclic import mc_mean_grad_gaussian
+from tuning.cyMINoncyclic import mc_mean_grad_noncyclic # poisson model
+from tuning.cyMINoncyclic import mc_mean_grad_gaussian, mc_mean_grad_gaussian_inhomo, \
+mc_mean_grad_gaussian_inhomo_no_corr # gaussian models
 import matplotlib.pyplot as plt
 
 

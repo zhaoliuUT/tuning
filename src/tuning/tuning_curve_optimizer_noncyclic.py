@@ -5,8 +5,13 @@ import scipy
 from scipy import optimize
 from functools import partial
 
-from tuning.cyMINoncyclic import *
 from tuning.tuning_curve_noncyclic import *
+
+from tuning.cyMINoncyclic import mc_mean_grad_noncyclic, mc_coeff_arimoto # poisson model
+from tuning.cyMINoncyclic import mc_mean_grad_gaussian, mc_mean_grad_gaussian_inhomo, \
+mc_mean_grad_gaussian_inhomo_no_corr # gaussian models
+from tuning.cyMINoncyclic import mc_coeff_arimoto_gaussian, mc_coeff_arimoto_gaussian_inhomo, \
+mc_coeff_arimoto_gaussian_inhomo_no_corr
 from tuning.simple_sgd import simple_sgd_with_laplacian
 from tuning.anim_3dcube import pc_fun_weights, gen_mixed_anim
 
