@@ -957,8 +957,8 @@ class TuningCurve_Noncyclic:
                                path_vec_list=None,
                                color_arr_list=None,
                                radius=1, min_radius=0,
-                               INCLUDE_FUN=True, INCLUDE_WEIGHT=True, INCLUDE_WEIGHT_BAR=True,
-                               FILE_NAME="", ADD_TIME=True,
+                               include_fun=True, include_weight=True, include_weight_bar=True,
+                               file_name="", add_time=True,
                                interval=1000,
                                **kwargs,
                               ):
@@ -975,9 +975,9 @@ class TuningCurve_Noncyclic:
                               path_vec_list=path_vec_list,
                               color_arr_list=color_arr_list,
                               radius=radius, min_radius=min_radius,
-                              INCLUDE_FUN=INCLUDE_FUN, INCLUDE_WEIGHT=INCLUDE_WEIGHT, 
-                              INCLUDE_WEIGHT_BAR=INCLUDE_WEIGHT_BAR,
-                              FILE_NAME=FILE_NAME, ADD_TIME=ADD_TIME,
+                              INCLUDE_FUN=include_fun, INCLUDE_WEIGHT=include_weight, 
+                              INCLUDE_WEIGHT_BAR=include_weight_bar,
+                              FILE_NAME=file_name, ADD_TIME=add_time,
                               interval=interval,
                               **kwargs,
                              )
