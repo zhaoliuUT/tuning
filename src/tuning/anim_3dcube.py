@@ -625,7 +625,7 @@ def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
             ax_points = fig.add_subplot(gs0[0], projection='3d')
         else: # data_dimension < =2
             ax_points = fig.add_subplot(gs0[0])
-        ax_points.set_aspect("equal")
+        #ax_points.set_aspect("equal") # not implemented in higher versions of matplotlib
 
         # ax_f_list is used for the line plots of the tuning curves (functions),
         # with x values being the weight, y values being the function values (points' coordinates)
@@ -660,7 +660,7 @@ def create_figure_canvas(data_dimension=3, radius=1, min_radius=0,
             ax_points = fig.gca(projection='3d')
         else:
             ax_points = fig.gca()
-        ax_points.set_aspect("equal")
+        #ax_points.set_aspect("equal") # not implemented in higher versions of matplotlib
         ax_f_list = None
         ax_w_bar = None
         ax_w = None
