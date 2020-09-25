@@ -292,9 +292,14 @@ class TuningCurveOptimizer_Noncyclic:
             curr_inv_cov_mat = self.inv_cov_mat.copy()
         
         # determine the functions for Blahut-Arimoto iterations and information evaluations
-        if self.model == 'Poisson':         
-            ba_iter_func = mc_coeff_arimoto
-            mc_iter_func = mc_mean_grad_noncyclic
+        if self.model == 'Poisson':
+            # For poisson models the functions defined do not have a 'inv_cov_mat' argument
+            ba_iter_func = (lambda cc, tn, ww, invcov, sl, cv, tu, niter, nthreads: 
+                            mc_coeff_arimoto(cc, tn, ww, sl, cv, tu, niter, nthreads)
+                           )
+            mc_iter_func = (lambda gd, tn, ww, invcov, cv, tu, niter, nthreads:
+                           mc_mean_grad_noncyclic(gd, tn, ww, cv, tu, niter, nthreads)
+                           )
         elif self.model == 'GaussianHomo':
             ba_iter_func = mc_coeff_arimoto_gaussian
             mc_iter_func = mc_mean_grad_gaussian
@@ -354,17 +359,11 @@ class TuningCurveOptimizer_Noncyclic:
             new_prob_vec = curr_weight.copy()
             for k in range(curr_ba_iter_steps):    
                 new_coeff = np.zeros(self.numBin)                    
-                if self.model == 'Poisson':
-                    ba_iter_func(
-                        new_coeff, curr_tuning, new_prob_vec,
-                        slope, self.conv, self.tau, 
-                        curr_ba_batch_size, my_num_threads = self.num_threads)
-                else:
-                    ba_iter_func(
-                        new_coeff, curr_tuning, new_prob_vec, 
-                        curr_inv_cov_mat, 
-                        slope, self.conv, self.tau, 
-                        curr_ba_batch_size, my_num_threads = self.num_threads)
+                ba_iter_func(
+                    new_coeff, curr_tuning, new_prob_vec, 
+                    curr_inv_cov_mat,
+                    slope, self.conv, self.tau, 
+                    curr_ba_batch_size, my_num_threads = self.num_threads)
                 new_prob_vec *= new_coeff
                 new_prob_vec /= np.sum(new_prob_vec)
 
@@ -393,17 +392,11 @@ class TuningCurveOptimizer_Noncyclic:
             
             if num_iter%alter_compute_info == 0:
                 grad_tc = np.zeros_like(curr_tuning)
-                if self.model=='Poisson':
-                    info_tc = mc_iter_func(
-                        grad_tc, curr_tuning, curr_weight, 
-                        self.conv, self.tau, 
-                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
-                else:
-                    info_tc = mc_iter_func(
-                        grad_tc, curr_tuning, curr_weight, 
-                        self.inv_cov_mat,
-                        self.conv, self.tau, 
-                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                info_tc = mc_iter_func(
+                    grad_tc, curr_tuning, curr_weight,
+                    self.inv_cov_mat,
+                    self.conv, self.tau,
+                    numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
                 if print_info:
                     print(num_iter, curr_sgd_batch_size, info_tc, spent_time1, spent_time2)
                 self.info_list += [info_tc, info_tc]
@@ -483,7 +476,9 @@ class TuningCurveOptimizer_Noncyclic:
         
         # determine the functions for mutual information evaluations
         if self.model == 'Poisson':
-            mc_iter_func = mc_mean_grad_noncyclic
+            mc_iter_func = (lambda gd, tn, ww, invcov, cv, tu, niter, nthreads:
+                           mc_mean_grad_noncyclic(gd, tn, ww, cv, tu, niter, nthreads)
+                           )
         elif self.model == 'GaussianInhomoNoCorr':
             mc_iter_func = mc_mean_grad_gaussian_inhomo_no_corr
         
@@ -596,17 +591,11 @@ class TuningCurveOptimizer_Noncyclic:
             
             if num_iter%alter_compute_info == 0:
                 grad_tc = np.zeros_like(curr_tuning)
-                if self.model=='Poisson':
-                    info_tc = mc_iter_func(
-                        grad_tc, curr_tuning, curr_weight, 
-                        self.conv, self.tau, 
-                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
-                else:
-                    info_tc = mc_iter_func(
-                        grad_tc, curr_tuning, curr_weight, 
-                        self.inv_cov_mat,
-                        self.conv, self.tau, 
-                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                info_tc = mc_iter_func(
+                    grad_tc, curr_tuning, curr_weight, 
+                    self.inv_cov_mat,
+                    self.conv, self.tau,
+                    numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
                 if print_info:
                     print(num_iter, 'MI', info_tc, spent_time1, spent_time2)
                 self.info_list += [info_tc, info_tc]
