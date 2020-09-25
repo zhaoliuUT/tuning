@@ -23,15 +23,20 @@ class TuningCurveOptimizer_Noncyclic:
     see commit: 8b58799
     
     Attributes:
-        Properties: model, numNeuro, numBin, conv, tau, num_threads
-        Current Tuning Information: tuning0, grad0, info0, average_cons, bounds
-        Optimization Constraints: fp, fm, fp_vec, fm_vec (temporarily not used in SGD),
+        Properties: model, numNeuro, numBin, inv_cov_mat (None for Poisson)
+                    conv, tau, num_threads
+        Current Tuning Information: tuning, weight, grad, info
+        Optimization Constraints: fp, fm, fp_vec, fm_vec (temporarily not used in SGD and LB-GD),
                                   laplacian_2d (true or false), laplacian_shape, weighted_laplacian
-        Result Storage: res_len, and 13 lists:
+        Result Storage: res_len, and 17 lists:
             tuning_list, weight_list, info_list, grad_list, 
             inv_cov_list, laplacian_coeff_list, time_list, mark_list, 
+            # for maximizing MI:
             sgd_learning_rate_list, sgd_batch_size_list, sgd_iter_steps_list, 
-            ba_batch_size_list, ba_iter_steps_list        
+            ba_batch_size_list, ba_iter_steps_list,
+            # for maximizing lower bound:
+            lbgd_learning_rate_list, lbgd_iter_steps_list, 
+            lbw_iter_steps_list, lbinfo_list, 
         
     Methods:
         __init__(self,
@@ -63,6 +68,30 @@ class TuningCurveOptimizer_Noncyclic:
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plotting                
                )
+ 
+        lower_bound_iterate(self,
+                total_num_iter, # total number of iterations
+                lbgd_learning_rate, # learning rate for gradient descent of lower bound
+                # same as the 'iterate' function, but laplacian coeffient is large in high dim (as the learning rate)
+                laplacian_coeff=0, # laplacian coefficient in regularization
+                laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
+                laplacian_shape=None, # only for 2d laplacian
+                weighted_laplacian=False, # whether laplacian is weighted
+
+                lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
+                lbgd_iter_steps=1, # number of steps for gd in every cycle
+                lbw_iter_steps=1, # number of steps for optimizing weights in every cycle                            
+                alter_compute_lbinfo=1, # compute the lower bound every several steps
+
+                # the following same as the 'iterate function'
+                alter_compute_info=1, # compute mutual information every several steps
+                alter_compute_info_mc=1e4, # number of Monte Carlo iterations used
+                print_info=True, # print mutual information every several steps
+                plot_live=False, #used in live plotting, only available for 1d
+                alter_plot_live=10, # plot every several steps
+                live_fig=None, # figure used for live plotting
+                live_ax_list=None, # axes used for live plottting
+               ):
                
         check_list_len(self) # check the lists' lengths
         reset(self, pos) # reset the lists at the given position
@@ -175,12 +204,47 @@ class TuningCurveOptimizer_Noncyclic:
         self.ba_batch_size_list = [None]
         self.ba_iter_steps_list = [None]
         self.laplacian_coeff_list = [None]
+        
+        self.lbgd_learning_rate_list = [None]
+        self.lbgd_iter_steps_list = [None]
+        self.lbw_iter_steps_list = [None]
+        self.lbinfo_list = [None]       
 
         self.res_len = 1 # result list length
         self.laplacian_2d = False # apply 2d laplacian or not
         self.laplacian_shape = None
         self.weighted_laplacian = False
 
+
+    def compute_info_grad(self, mc_iter=1e5):
+        '''        
+        Compute mutual information and gradient of mutual information for the current tuning curve.
+        (Since not for optimization purporses, +I and +gradI.)
+        mc_iter: number of iterations in monte carlo method.
+        use self.num_threads for computation.
+        '''
+        grad0 = np.zeros((self.numNeuro, self.numBin))
+        if self.model == 'Poisson':
+            mean0 = mc_mean_grad_noncyclic(grad0, self.tuning, self.weight, 
+                                           self.conv, self.tau, 
+                                           mc_iter, self.num_threads)
+        elif self.model == 'GaussianHomo':
+            mean0 = mc_mean_grad_gaussian(grad0, self.tuning, self.weight, self.inv_cov_mat,
+                                           self.conv, self.tau, 
+                                           mc_iter, self.num_threads)
+        elif self.model == 'GaussianInhomo':
+            mean0 = mc_mean_grad_gaussian_inhomo(grad0, self.tuning, self.weight, self.inv_cov_mat,
+                                                 self.conv, self.tau, 
+                                                 mc_iter, self.num_threads)
+        elif self.model == 'GaussianInhomoNoCorr':
+            mean0 = mc_mean_grad_gaussian_inhomo_no_corr(grad0, self.tuning, self.weight, 
+                                                         self.inv_cov_mat,
+                                                         self.conv, self.tau, 
+                                                         mc_iter, self.num_threads)          
+            
+        self.grad = grad0.copy()
+        self.info = mean0
+        
 
     def iterate(self,
                 total_num_iter, # total number of iterations
@@ -204,7 +268,8 @@ class TuningCurveOptimizer_Noncyclic:
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plotting                
                ):
-        
+        '''Alternating maximization of the mutual information with SGD and Blahut-Arimoto'''     
+
         self.laplacian_2d = laplacian_2d
         self.laplacian_shape = laplacian_shape
         self.weighted_laplacian = weighted_laplacian
@@ -317,6 +382,11 @@ class TuningCurveOptimizer_Noncyclic:
             self.sgd_iter_steps_list += [curr_sgd_iter_steps, 0]
             self.ba_iter_steps_list += [0, curr_ba_iter_steps]
             
+            self.lbgd_learning_rate_list += [None, None]
+            self.lbgd_iter_steps_list += [None, None]
+            self.lbw_iter_steps_list += [None, None]
+            self.lbinfo_list += [None, None]
+                        
             self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
             
             if num_iter%alter_compute_info == 0:
@@ -356,14 +426,219 @@ class TuningCurveOptimizer_Noncyclic:
         self.grad = self.grad_list[-1].copy() 
         self.info = self.info_list[-1]
         self.res_len = len(self.tuning_list)
+
         
-    
+    def lower_bound_iterate(self,
+                            total_num_iter, # total number of iterations
+                            lbgd_learning_rate, # learning rate for gradient descent of lower bound
+                            # same as the 'iterate' function, but laplacian coeffient is large in high dim (as the learning rate)
+                            laplacian_coeff=0, # laplacian coefficient in regularization
+                            laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
+                            laplacian_shape=None, # only for 2d laplacian
+                            weighted_laplacian=False, # whether laplacian is weighted
+
+                            lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))
+                            
+                            lbgd_iter_steps=1, # number of steps for gd in every cycle
+                            lbw_iter_steps=1, # number of steps for optimizing weights in every cycle
+                            
+                            alter_compute_lbinfo=1, # compute the lower bound every several steps
+                            
+                            # the following same as the 'iterate function'
+                            alter_compute_info=1, # compute mutual information every several steps
+                            alter_compute_info_mc=1e4, # number of Monte Carlo iterations used
+                            print_info=True, # print mutual information every several steps
+                            plot_live=False, #used in live plotting, only available for 1d
+                            alter_plot_live=10, # plot every several steps
+                            live_fig=None, # figure used for live plotting
+                            live_ax_list=None, # axes used for live plottting
+                           ):
+        
+        '''Alternating maximization of the lower bound of mutual information with GD for both steps'''
+        
+        if self.model not in ['Poisson', 'GaussianInhomoNoCorr']:
+            raise Exception('Model not implemented!')
+        
+        self.laplacian_2d = laplacian_2d
+        self.laplacian_shape = laplacian_shape
+        self.weighted_laplacian = weighted_laplacian
+        if (not laplacian_2d) and (laplacian_shape is not None):
+            raise Exception('No input needed for laplacian shape for 1d neighbour case')
+        if laplacian_2d and laplacian_shape is None:
+            raise Exception('Missing input for laplacian shape for 2d neighbour case')
+        if laplacian_shape is not None:
+            if (len(laplacian_shape)!= 3 or laplacian_shape[0] != self.numNeuro 
+                or laplacian_shape[1]*laplacian_shape[2]!= self.numBin):
+                raise Exception('Wrong input for laplacian shape for 2d neighbour case')
+        
+        curr_tuning = self.tuning.copy()
+        curr_weight = self.weight.copy()
+        
+        if self.model == 'Poisson':
+            curr_var_diagonal = self.tuning.copy()
+        elif self.model == 'GaussianInhomoNoCorr':
+            curr_var_diagonal = 1.0/self.inv_cov_mat
+        
+        # determine the functions for mutual information evaluations
+        if self.model == 'Poisson':
+            mc_iter_func = mc_mean_grad_noncyclic
+        elif self.model == 'GaussianInhomoNoCorr':
+            mc_iter_func = mc_mean_grad_gaussian_inhomo_no_corr
+        
+        # Define the weight optimization function, gradient and constraints
+        def weight_opt_fun(w, A, V):
+            # -I_lower (for minimization) (without the constant term)
+            # A.shape = (numBin, numBin) # Q in the formula
+            # V.shape = (numBin, ) # sum_{k}(log(V_{k,i})) in the formula
+            return np.dot(w, np.log(np.dot(A, w))) + 0.5*np.dot(w, V)# + gamma*np.sum(w**2)
+
+        def weight_grad_fun(w, A, V):
+            # negative gradient of I_lower
+            wA = np.dot(A, w) #np.sum(w[None,:]*A, axis = 1)    
+            return np.dot(A.T, w/wA) + np.log(wA) + 0.5*V# + gamma*np.sum(w**2)
+
+        weight_cons = [{'type':'eq', 'fun': lambda w: (np.sum(w) - 1)}]
+        weight_bounds = []
+        for j in range(self.numBin): # number of bins
+            weight_bounds += [(0, 1)]
+        weight_bounds = tuple(weight_bounds)
+                
+        for num_iter in range(1, total_num_iter+1):
+            if lbgd_decrease_lr:
+                curr_lbgd_learning_rate = lbgd_learning_rate/(np.sqrt(num_iter + 1))
+            else:
+                curr_lbgd_learning_rate = lbgd_learning_rate
+
+            curr_lbgd_iter_steps = lbgd_iter_steps #int(1000/curr_sgd_batch_size)
+            curr_lbw_iter_steps = lbw_iter_steps
+            curr_laplacian_coeff = laplacian_coeff
+
+            # ------GD for updating the points' coordinates------
+            curr_time = time.time()
+            x_list, _ = lower_bound_gd_with_laplacian(
+                self.model, 
+                curr_tuning,               
+                curr_weight,
+                eta=curr_lbgd_learning_rate,
+                num_iter=curr_lbgd_iter_steps,
+                fp=self.fp, 
+                fm=self.fm, # not working when fp_vec, fm_vec is not uniform...
+                var_diagonal=curr_var_diagonal,
+                laplacian_coeff=curr_laplacian_coeff,
+                laplacian_shape=laplacian_shape,
+                weighted_laplacian=weighted_laplacian,
+                conv=self.conv,
+                tau=self.tau,
+                num_threads=self.num_threads,
+            )
+
+            curr_tuning = x_list[-1].copy()
+            # update the variance matrix if Poisson
+            if self.model == 'Poisson':
+                curr_var_diagonal = curr_tuning.copy()
+            spent_time1 = time.time() - curr_time
+            self.time_list.append(spent_time1)
+            self.tuning_list.append(curr_tuning.copy())
+            self.weight_list.append(curr_weight.copy())
+            self.mark_list.append('lbgd')
+
+
+            # ------Constrained optimizatino for updating the weights------                        
+            curr_time = time.time()
+            if curr_lbw_iter_steps > 0:                    
+                Q_matrix = lower_bound_compute_Q_matrix(curr_tuning, curr_var_diagonal)
+                log_var = np.sum(np.log(curr_var_diagonal), axis = 0)
+                disp = False
+                ftol = 1e-6
+                res = optimize.minimize(weight_opt_fun, 
+                                        curr_weight, 
+                                        args = (Q_matrix, log_var), # gamma
+                                        method='SLSQP', 
+                                        jac = weight_grad_fun,
+                                        bounds = weight_bounds, 
+                                        constraints = weight_cons,
+                                        options = {'maxiter':curr_lbw_iter_steps, 
+                                                   'ftol': ftol, 'disp': disp}
+                                       )
+                curr_weight = res['x'].copy()
+            spent_time2 = time.time() - curr_time
+            self.time_list.append(spent_time2)          
+            self.tuning_list.append(curr_tuning.copy())
+            self.weight_list.append(curr_weight.copy())
+            self.mark_list.append('lbw')
+            
+            # ------save results------   
+            self.lbgd_learning_rate_list += [curr_lbgd_learning_rate, curr_lbgd_learning_rate]
+            self.lbgd_iter_steps_list += [curr_lbgd_iter_steps, curr_lbgd_iter_steps]
+            self.lbw_iter_steps_list += [curr_lbw_iter_steps, curr_lbw_iter_steps]
+            self.laplacian_coeff_list += [curr_laplacian_coeff, curr_laplacian_coeff]
+            self.sgd_learning_rate_list +=[None, None]
+            self.sgd_batch_size_list += [None, None]
+            self.ba_batch_size_list += [None, None]
+            self.sgd_iter_steps_list += [None, None]
+            self.ba_iter_steps_list += [None, None]
+            if self.model == 'Poisson':
+                curr_inv_cov_mat = None
+            else:
+                curr_inv_cov_mat = self.inv_cov_mat
+            self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+            
+            if num_iter%alter_compute_lbinfo == 0:
+                lbinfo_tc = lower_bound_evaluate(curr_tuning, curr_weight, curr_var_diagonal)
+                if print_info:
+                    print(num_iter, 'LB', lbinfo_tc, spent_time1, spent_time2)
+                self.lbinfo_list += [lbinfo_tc, lbinfo_tc]
+            else:
+                self.lbinfo_list += [None, None]
+
+            
+            if num_iter%alter_compute_info == 0:
+                grad_tc = np.zeros_like(curr_tuning)
+                if self.model=='Poisson':
+                    info_tc = mc_iter_func(
+                        grad_tc, curr_tuning, curr_weight, 
+                        self.conv, self.tau, 
+                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                else:
+                    info_tc = mc_iter_func(
+                        grad_tc, curr_tuning, curr_weight, 
+                        self.inv_cov_mat,
+                        self.conv, self.tau, 
+                        numIter=int(alter_compute_info_mc), my_num_threads=self.num_threads)
+                if print_info:
+                    print(num_iter, 'MI', info_tc, spent_time1, spent_time2)
+                self.info_list += [info_tc, info_tc]
+                self.grad_list += [grad_tc.copy(), grad_tc.copy()]
+            else:
+                self.info_list += [None, None]
+                self.grad_list += [None, None]
+
+            if plot_live and num_iter%alter_plot_live==0:
+                for i in range(self.numNeuro):
+                    live_ax_list[i].clear()
+                    xx, yy = pc_fun_weights(curr_tuning[i,:], curr_weight)
+                    live_ax_list[i].plot(xx, yy)
+                    live_ax_list[i].set_ylim([self.fm-0.1, self.fp+0.1])
+        #         time.sleep(0.1)
+                live_fig.canvas.draw()
+        
+                
+        # update current tuning, weight, grad, info, res_len
+        self.tuning = self.tuning_list[-1].copy() 
+        self.weight = self.weight_list[-1].copy() 
+        self.grad = self.grad_list[-1].copy() 
+        self.info = self.info_list[-1]
+        self.res_len = len(self.tuning_list)
+
+        
     def check_list_len(self):
-        # 13 lists same as self.res_len?
+        # 17 lists same as self.res_len?
         print(len(self.tuning_list), len(self.weight_list), len(self.info_list), \
               len(self.grad_list), len(self.inv_cov_list), len(self.time_list), len(self.mark_list), \
               len(self.sgd_learning_rate_list), len(self.sgd_iter_steps_list), len(self.sgd_iter_steps_list), \
               len(self.ba_batch_size_list), len(self.ba_iter_steps_list), len(self.laplacian_coeff_list), \
+              len(self.lbgd_learning_rate_list), len(self.lbgd_iter_steps_list), \
+              len(self.lbw_iter_steps_list), len(self.lbinfo_list),
               self.res_len, 
               )
 
@@ -385,6 +660,11 @@ class TuningCurveOptimizer_Noncyclic:
         self.ba_iter_steps_list = self.ba_iter_steps_list[0:m]
         self.laplacian_coeff_list = self.laplacian_coeff_list[0:m]
         self.inv_cov_list = self.inv_cov_list[0:m]
+        
+        self.lbgd_learning_rate_list = self.lbgd_learning_rate_list[0:m]
+        self.lbgd_iter_steps_list = self.lbgd_iter_steps_list[0:m]
+        self.lbw_iter_steps_list = self.lbw_iter_steps_list[0:m]
+        self.lbinfo_list = self.lbinfo_list[0:m]
 
         self.tuning = self.tuning_list[-1].copy()
         self.weight = self.weight_list[-1].copy()
@@ -414,16 +694,35 @@ class TuningCurveOptimizer_Noncyclic:
         tc.plot(**kwargs)
         
                   
-    def plot_info(self, alternate=False, color_sgd='r', color_ba='b'):
-        #plot_info(self, ax, alternate=False, color_sgd='r', color_ba='b'):
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
+    def plot_info(self, ax=None, alternate=False, color1='r', color2='b', **kwargs):
+        '''Plot the values of mutual information.
+        If alternate is False then use the usual ax.plot() function with kwargs.
+        '''
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
         if alternate:
             self.__class__.plot_info_alternate(ax, 
                                                self.info_list, self.mark_list, index_list=None, 
-                                               color_sgd=color_sgd, color_ba=color_ba)
+                                               mark1='sgd', mark2='ba',
+                                               color1=color1, color2=color2)
         else:
-            ax.plot(self.info_list)
+            ax.plot(self.info_list, **kwargs)
+            
+    def plot_lbinfo(self, ax=None, alternate=False, color1='r', color2='b', **kwargs):
+        '''Plot the values of lower bound of mutual information.
+        If alternate is False then use the usual ax.plot() function with kwargs.
+        '''
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+        if alternate:
+            self.__class__.plot_info_alternate(ax, 
+                                               self.lbinfo_list, self.mark_list, index_list=None,
+                                               mark1='lbgd', makr2='lbw',
+                                               color1=color1, color2=color2)
+        else:
+            ax.plot(self.lbinfo_list, **kwargs)
             
     def plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000,
                        dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
@@ -516,6 +815,11 @@ class TuningCurveOptimizer_Noncyclic:
         res_dict['ba_iter_steps'] = self.ba_iter_steps_list
         res_dict['laplacian_coeff'] = self.laplacian_coeff_list
         
+        res_dict['lbgd_learning_rate'] = self.lbgd_learning_rate_list
+        res_dict['lbgd_iter_steps'] = self.lbgd_iter_steps_list
+        res_dict['lbw_iter_steps'] = self.lbw_iter_steps_list
+        res_dict['lbinfo'] = self.lbinfo_list
+        
         if add_time:
             timestr = time.strftime("%m%d-%H%M%S")
         else:
@@ -572,6 +876,11 @@ class TuningCurveOptimizer_Noncyclic:
         tc_opt.ba_iter_steps_list = copy.copy(res_dict['ba_iter_steps'])
         tc_opt.laplacian_coeff_list = copy.copy(res_dict['laplacian_coeff'])
         
+        tc_opt.lbgd_learning_rate_list = copy.copy(res_dict['lbgd_learning_rate'])
+        tc_opt.lbgd_iter_steps_list = copy.copy(res_dict['lbgd_iter_steps'])
+        tc_opt.lbw_iter_steps_list = copy.copy(res_dict['lbw_iter_steps'])
+        tc_opt.lbinfo_list = copy.copy(res_dict['lbinfo'])
+        
         # current tuning, weight, grad, info and other attributes
         tc_opt.tuning = res_dict['tuning'][-1].copy()   
         tc_opt.weight = res_dict['weight'][-1].copy()   
@@ -585,18 +894,20 @@ class TuningCurveOptimizer_Noncyclic:
         return tc_opt
     
     @staticmethod
-    def plot_info_alternate(ax, info_list, mark_list, index_list=None, color_sgd = 'r', color_ba = 'b'):
+    def plot_info_alternate(ax, info_list, mark_list, index_list=None,
+                            mark1='sgd', mark2='ba', color1='r', color2='b',
+                           ):
         if index_list is None:
             index_list = np.arange(len(info_list))
         else:
             index_list = np.array(index_list)
 
-        sgd_idx = [i for i in index_list if mark_list[i]=='sgd']
-        bandit_idx = [i for i in index_list if mark_list[i]=='ba']
+        mark1_idx = [i for i in index_list if mark_list[i]==mark1]
+        mark2_idx = [i for i in index_list if mark_list[i]==mark2]
 
         #plt.figure(figsize=(16,8))
-        for idx in sgd_idx:
-            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_sgd)
+        for idx in mark1_idx:
+            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color1)
 
-        for idx in bandit_idx:
-            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color_ba)
+        for idx in mark2_idx:
+            ax.plot([idx-1, idx], [info_list[idx-1], info_list[idx]], c=color2)
