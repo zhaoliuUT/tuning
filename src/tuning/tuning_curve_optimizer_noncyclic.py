@@ -33,6 +33,7 @@ class TuningCurveOptimizer_Noncyclic:
         Result Storage: res_len, and 17 lists:
             tuning_list, weight_list, info_list, grad_list, 
             laplacian_coeff_list, time_list, mark_list, 
+            num_iter_list,
             # for maximizing MI:
             sgd_learning_rate_list, sgd_batch_size_list, sgd_iter_steps_list, 
             ba_batch_size_list, ba_iter_steps_list,
@@ -215,6 +216,7 @@ class TuningCurveOptimizer_Noncyclic:
         self.lbw_iter_steps_list = [None]
         self.lbinfo_list = [None]       
 
+        self.num_iter_list = [0]
         self.res_len = 1 # result list length
         self.laplacian_2d = False # apply 2d laplacian or not
         self.laplacian_shape = None
@@ -315,6 +317,8 @@ class TuningCurveOptimizer_Noncyclic:
             mc_iter_func = mc_mean_grad_gaussian_inhomo_no_corr
             # when the variance has a derivative it is implemented,
             # but function arguments are not compatible with other sgd&arimoto functions.
+            
+        start_num_iter = self.num_iter_list[-1]
                 
         for num_iter in range(1, total_num_iter+1):
             if sgd_decrease_lr:
@@ -357,6 +361,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.tuning_list.append(curr_tuning.copy())
                 self.weight_list.append(curr_weight.copy())
                 self.time_list += [spent_time1]
+                self.num_iter_list += [start_num_iter + num_iter]
                 if compute_info:
                     grad_tc = np.zeros_like(curr_tuning)
                     info_tc = mc_iter_func(
@@ -396,6 +401,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.tuning_list.append(curr_tuning.copy())
                 self.weight_list.append(curr_weight.copy())
                 self.time_list += [spent_time2]
+                self.num_iter_list += [start_num_iter + num_iter]
                 if compute_info:
                     grad_tc = np.zeros_like(curr_tuning)
                     info_tc = mc_iter_func(
@@ -518,6 +524,8 @@ class TuningCurveOptimizer_Noncyclic:
         for j in range(self.numBin): # number of bins
             weight_bounds += [(0, 1)]
         weight_bounds = tuple(weight_bounds)
+        
+        start_num_iter = self.num_iter_list[-1]
                 
         for num_iter in range(1, total_num_iter+1):
             if lbgd_decrease_lr:
@@ -560,6 +568,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.tuning_list.append(curr_tuning.copy())
                 self.weight_list.append(curr_weight.copy())
                 self.time_list += [spent_time1]
+                self.num_iter_list += [start_num_iter + num_iter]
                 if compute_lbinfo:
                     lbinfo_tc = lower_bound_evaluate(curr_tuning, curr_weight, curr_var_diagonal)
                     if print_info:
@@ -610,6 +619,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.tuning_list.append(curr_tuning.copy())
                 self.weight_list.append(curr_weight.copy())
                 self.time_list += [spent_time2]
+                self.num_iter_list += [start_num_iter + num_iter]
                 if compute_lbinfo:
                     lbinfo_tc = lower_bound_evaluate(curr_tuning, curr_weight, curr_var_diagonal)
                     if print_info:
@@ -675,7 +685,7 @@ class TuningCurveOptimizer_Noncyclic:
               len(self.ba_batch_size_list), len(self.ba_iter_steps_list), len(self.laplacian_coeff_list), \
               len(self.lbgd_learning_rate_list), len(self.lbgd_iter_steps_list), \
               len(self.lbw_iter_steps_list), len(self.lbinfo_list),
-              self.res_len, 
+              len(self.num_iter_list), self.res_len, 
               )
 
     def reset(self, pos):
@@ -701,6 +711,7 @@ class TuningCurveOptimizer_Noncyclic:
         self.lbgd_iter_steps_list = self.lbgd_iter_steps_list[0:m]
         self.lbw_iter_steps_list = self.lbw_iter_steps_list[0:m]
         self.lbinfo_list = self.lbinfo_list[0:m]
+        self.num_iter_list = self.num_iter_list[0:m]
 
         self.tuning = self.tuning_list[-1].copy()
         self.weight = self.weight_list[-1].copy()
@@ -730,7 +741,8 @@ class TuningCurveOptimizer_Noncyclic:
         tc.plot(**kwargs)
         
                   
-    def plot_info(self, ax=None, alternate=False, color1='r', color2='b', **kwargs):
+    def plot_info(self, ax=None, alternate=False, 
+                  mark1='sgd', mark2='ba', color1='r', color2='b', **kwargs):
         '''Plot the values of mutual information.
         If alternate is False then use the usual ax.plot() function with kwargs.
         '''
@@ -738,14 +750,17 @@ class TuningCurveOptimizer_Noncyclic:
             fig = plt.figure()
             ax = fig.add_subplot(111)
         if alternate:
+            # the x axis is not adjusted to number of iterations (too complicated)
             self.__class__.plot_info_alternate(ax, 
                                                self.info_list, self.mark_list, index_list=None, 
-                                               mark1='sgd', mark2='ba',
+                                               mark1=mark1, mark2=mark2,
                                                color1=color1, color2=color2)
         else:
-            ax.plot(self.info_list, **kwargs)
+            ax.plot(self.num_iter_list, self.info_list, **kwargs)
+        return ax
             
-    def plot_lbinfo(self, ax=None, alternate=False, color1='r', color2='b', **kwargs):
+    def plot_lbinfo(self, ax=None, alternate=False, 
+                    mark1='lbgd', mark2='lbw', color1='r', color2='b', **kwargs):
         '''Plot the values of lower bound of mutual information.
         If alternate is False then use the usual ax.plot() function with kwargs.
         '''
@@ -753,12 +768,14 @@ class TuningCurveOptimizer_Noncyclic:
             fig = plt.figure()
             ax = fig.add_subplot(111)
         if alternate:
+            # the x axis is not adjusted to number of iterations (too complicated)
             self.__class__.plot_info_alternate(ax, 
-                                               self.lbinfo_list, self.mark_list, index_list=None,
-                                               mark1='lbgd', makr2='lbw',
+                                               self.lbinfo_list, self.mark_list, index_list=None,                                               
+                                               mark1=mark1, mark2=mark2,
                                                color1=color1, color2=color2)
         else:
-            ax.plot(self.lbinfo_list, **kwargs)
+            ax.plot(self.num_iter_list, self.lbinfo_list, **kwargs)
+        return ax
             
     def plot_animation(self, FILE_NAME = "", ADD_TIME = True, interval = 1000,
                        dt = 1, XTICKS_IDX_LIST = [], ALIGN = "row", # options for non-cube animation
@@ -856,6 +873,7 @@ class TuningCurveOptimizer_Noncyclic:
         res_dict['lbgd_iter_steps'] = self.lbgd_iter_steps_list
         res_dict['lbw_iter_steps'] = self.lbw_iter_steps_list
         res_dict['lbinfo'] = self.lbinfo_list
+        res_dict['num_iter'] =  self.num_iter_list
         
         if add_time:
             timestr = time.strftime("%m%d-%H%M%S")
@@ -917,11 +935,12 @@ class TuningCurveOptimizer_Noncyclic:
         tc_opt.lbgd_iter_steps_list = copy.copy(res_dict['lbgd_iter_steps'])
         tc_opt.lbw_iter_steps_list = copy.copy(res_dict['lbw_iter_steps'])
         tc_opt.lbinfo_list = copy.copy(res_dict['lbinfo'])
+        tc_opt.num_iter_list = copy.copy(res_dict['num_iter'])
         
         # current tuning, weight, grad, info and other attributes
         tc_opt.tuning = res_dict['tuning'][-1].copy()   
         tc_opt.weight = res_dict['weight'][-1].copy()   
-        tc_opt.grad = res_dict['grad'][-1].copy()   
+        tc_opt.grad = res_dict['grad'][-1].copy()
         tc_opt.info = res_dict['info'][-1]
         
         tc_opt.res_len = len(res_dict['info']) # result list length
