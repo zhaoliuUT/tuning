@@ -13,6 +13,8 @@ mc_mean_grad_gaussian_inhomo_no_corr # gaussian models
 from tuning.cyMINoncyclic import mc_coeff_arimoto_gaussian, mc_coeff_arimoto_gaussian_inhomo, \
 mc_coeff_arimoto_gaussian_inhomo_no_corr
 from tuning.simple_sgd import simple_sgd_with_laplacian
+from tuning.lower_bound_gd import lower_bound_compute_Q_matrix, lower_bound_evaluate, \
+lower_bound_grad, lower_bound_gd_with_laplacian
 from tuning.anim_3dcube import pc_fun_weights, gen_mixed_anim
 
 
