@@ -62,10 +62,13 @@ class TuningCurveOptimizer_Noncyclic:
                 sgd_iter_steps=1, # number of steps for sgd in every cycle
                 ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
                 ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
-                
+                # saving options
                 save_steps=1, # save result every several steps
+                alter_save=True, # save the sgd/ba steps alternatively and mark as 'sgd'/'ba'.
+                # (otherwise mark as 'mi').
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used
+                # printing and plotting options
                 print_info=True, # print mutual information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
                 alter_plot_live=10, # plot every several steps
@@ -82,22 +85,25 @@ class TuningCurveOptimizer_Noncyclic:
                 laplacian_shape=None, # only for 2d laplacian
                 weighted_laplacian=False, # whether laplacian is weighted
 
-                lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
-                lbgd_iter_steps=1, # number of steps for gd in every cycle
-                lbw_iter_steps=1, # number of steps for optimizing weights in every cycle                            
+                lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))
 
+                lbgd_iter_steps=1, # number of steps for gd in every cycle
+                lbw_iter_steps=1, # number of steps for optimizing weights in every cycle
+                # saving options
                 save_steps=1, # save result every several steps
+                alter_save=True, # save the gd and weight maximization steps alternatively 
+                # and mark as 'lbgd'/'lbw'. (otherwise mark as 'lb').
                 compute_info=True, # compute mutual information every several steps
-                compute_info_mc=1e4, # number of Monte Carlo iterations used
+                compute_info_mc=1e4, # number of Monte Carlo iterations used                            
                 compute_lbinfo=True, # compute the lower bound every several steps
 
-                # the following same as the 'iterate function'
-                print_info=True, # print mutual information every several steps
+                # print and plot options
+                print_info=True, # print information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
                 alter_plot_live=10, # plot every several steps
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plottting
-               ):
+               )
                
         check_list_len(self) # check the lists' lengths
         reset(self, pos) # reset the lists at the given position
@@ -266,10 +272,13 @@ class TuningCurveOptimizer_Noncyclic:
                 sgd_iter_steps=1, # number of steps for sgd in every cycle
                 ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
                 ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
-                
+                # saving options
                 save_steps=1, # save result every several steps
+                alter_save=True, # save the sgd/ba steps alternatively and mark as 'sgd'/'ba'.
+                # (otherwise mark as 'mi').
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used
+                # printing and plotting options
                 print_info=True, # print mutual information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
                 alter_plot_live=10, # plot every several steps
@@ -355,7 +364,7 @@ class TuningCurveOptimizer_Noncyclic:
 
             curr_tuning = x_list[-1].copy()
             spent_time1 = time.time() - curr_time
-            if num_iter % save_steps == 0:
+            if num_iter % save_steps == 0 and alter_save:
                 # save after the sgd step
                 self.mark_list += ['sgd']
                 self.tuning_list.append(curr_tuning.copy())
@@ -370,12 +379,23 @@ class TuningCurveOptimizer_Noncyclic:
                         self.conv, self.tau,
                         int(compute_info_mc), self.num_threads)
                     if print_info:
-                        print(num_iter, 'SGD', curr_sgd_batch_size, info_tc, spent_time1, spent_time2)
+                        print(num_iter, 'SGD', curr_sgd_batch_size, info_tc, spent_time1)
                     self.info_list += [info_tc]
                     self.grad_list += [grad_tc.copy()]
                 else:
                     self.info_list += [None]
                     self.grad_list += [None]
+                self.sgd_learning_rate_list +=[curr_sgd_learning_rate]
+                self.sgd_batch_size_list += [curr_sgd_batch_size]
+                self.sgd_iter_steps_list += [curr_sgd_iter_steps]
+                self.laplacian_coeff_list += [curr_laplacian_coeff]
+                self.ba_batch_size_list += [curr_ba_batch_size]
+                self.ba_iter_steps_list += [curr_ba_iter_steps]
+                self.lbgd_learning_rate_list += [None]
+                self.lbgd_iter_steps_list += [None]
+                self.lbw_iter_steps_list += [None]
+                self.lbinfo_list += [None]
+                #self.inv_cov_list += [curr_inv_cov_mat]
 
             # ------Monte Carlo based Arimoto Interation for updating the weights------                        
             curr_time = time.time()
@@ -386,7 +406,7 @@ class TuningCurveOptimizer_Noncyclic:
                 ba_iter_func(
                     new_coeff, curr_tuning, new_prob_vec,
                     curr_inv_cov_mat,
-                    slope, self.conv, self.tau, 
+                    slope, self.conv, self.tau,
                     curr_ba_batch_size, self.num_threads)
                 new_prob_vec *= new_coeff
                 new_prob_vec /= np.sum(new_prob_vec)
@@ -396,11 +416,14 @@ class TuningCurveOptimizer_Noncyclic:
             
             # ------save results------ 
             if num_iter % save_steps == 0:
-                # save after arimoto step (sgd step saved perviously)
-                self.mark_list += ['ba']
+                if alter_save: # save after arimoto step (sgd step saved perviously)
+                    self.mark_list += ['ba']
+                    self.time_list += [spent_time2]
+                else: # save after a sgd-arimoto cycle
+                    self.mark_list += ['mi']
+                    self.time_list += [spent_time1 + spent_time2]
                 self.tuning_list.append(curr_tuning.copy())
-                self.weight_list.append(curr_weight.copy())
-                self.time_list += [spent_time2]
+                self.weight_list.append(curr_weight.copy())                
                 self.num_iter_list += [start_num_iter + num_iter]
                 if compute_info:
                     grad_tc = np.zeros_like(curr_tuning)
@@ -409,27 +432,28 @@ class TuningCurveOptimizer_Noncyclic:
                         self.inv_cov_mat,
                         self.conv, self.tau,
                         int(compute_info_mc), self.num_threads)
-                    if print_info:
-                        print(num_iter, 'BA', curr_ba_batch_size, info_tc, spent_time1, spent_time2)
+                    if print_info and alter_save:
+                        print(num_iter, 'BA', curr_ba_batch_size, info_tc, spent_time2)
+                    elif print_info and (not alter_save):
+                        print(num_iter, curr_sgd_batch_size, curr_ba_batch_size, info_tc, 
+                              spent_time1, spent_time2)
                     self.info_list += [info_tc]
                     self.grad_list += [grad_tc.copy()]
                 else:
                     self.info_list += [None]
                     self.grad_list += [None]
-                
-                # save after two steps                
-                self.sgd_learning_rate_list +=[curr_sgd_learning_rate, None]
-                self.sgd_batch_size_list += [curr_sgd_batch_size, None]
-                self.sgd_iter_steps_list += [curr_sgd_iter_steps, None]
-                self.laplacian_coeff_list += [curr_laplacian_coeff, None]
-                self.ba_batch_size_list += [None, curr_ba_batch_size]
-                self.ba_iter_steps_list += [None, curr_ba_iter_steps]
-
-                self.lbgd_learning_rate_list += [None, None]
-                self.lbgd_iter_steps_list += [None, None]
-                self.lbw_iter_steps_list += [None, None]
-                self.lbinfo_list += [None, None]
-                #self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+                            
+                self.sgd_learning_rate_list +=[curr_sgd_learning_rate]
+                self.sgd_batch_size_list += [curr_sgd_batch_size]
+                self.sgd_iter_steps_list += [curr_sgd_iter_steps]
+                self.laplacian_coeff_list += [curr_laplacian_coeff]
+                self.ba_batch_size_list += [curr_ba_batch_size]
+                self.ba_iter_steps_list += [curr_ba_iter_steps]
+                self.lbgd_learning_rate_list += [None]
+                self.lbgd_iter_steps_list += [None]
+                self.lbw_iter_steps_list += [None]
+                self.lbinfo_list += [None]
+                #self.inv_cov_list += [curr_inv_cov_mat]
 
             if plot_live and num_iter%alter_plot_live==0:
                 for i in range(self.numNeuro):
@@ -460,14 +484,16 @@ class TuningCurveOptimizer_Noncyclic:
                             
                             lbgd_iter_steps=1, # number of steps for gd in every cycle
                             lbw_iter_steps=1, # number of steps for optimizing weights in every cycle
-                            
+                            # saving options
                             save_steps=1, # save result every several steps
+                            alter_save=True, # save the gd and weight maximization steps alternatively 
+                            # and mark as 'lbgd'/'lbw'. (otherwise mark as 'lb').
                             compute_info=True, # compute mutual information every several steps
                             compute_info_mc=1e4, # number of Monte Carlo iterations used                            
                             compute_lbinfo=True, # compute the lower bound every several steps
                             
-                            # the following same as the 'iterate function'
-                            print_info=True, # print mutual information every several steps
+                            # print and plot options
+                            print_info=True, # print information every several steps
                             plot_live=False, #used in live plotting, only available for 1d
                             alter_plot_live=10, # plot every several steps
                             live_fig=None, # figure used for live plotting
@@ -562,7 +588,7 @@ class TuningCurveOptimizer_Noncyclic:
                 curr_var_diagonal = curr_tuning.copy()
             spent_time1 = time.time() - curr_time
             
-            if num_iter % save_steps == 0:
+            if num_iter % save_steps == 0 and alter_save:
                 # save after the gd step
                 self.mark_list += ['lbgd']
                 self.tuning_list.append(curr_tuning.copy())
@@ -572,10 +598,10 @@ class TuningCurveOptimizer_Noncyclic:
                 if compute_lbinfo:
                     lbinfo_tc = lower_bound_evaluate(curr_tuning, curr_weight, curr_var_diagonal)
                     if print_info:
-                        print(num_iter, 'LB', lbinfo_tc, spent_time1, spent_time2)
+                        print(num_iter, 'LB', lbinfo_tc, spent_time1)
                     self.lbinfo_list += [lbinfo_tc]
                 else:
-                    self.lbinfo_list += [None]                    
+                    self.lbinfo_list += [None]
                 if compute_info:
                     grad_tc = np.zeros_like(curr_tuning)
                     info_tc = mc_iter_func(
@@ -584,12 +610,22 @@ class TuningCurveOptimizer_Noncyclic:
                         self.conv, self.tau,
                         int(compute_info_mc), self.num_threads)
                     if print_info:
-                        print(num_iter, 'MI', info_tc, spent_time1, spent_time2)
+                        print(num_iter, 'MI', info_tc, spent_time1)
                     self.info_list += [info_tc]
                     self.grad_list += [grad_tc.copy()]
                 else:
                     self.info_list += [None]
                     self.grad_list += [None]
+                self.lbgd_learning_rate_list += [curr_lbgd_learning_rate]
+                self.lbgd_iter_steps_list += [curr_lbgd_iter_steps]
+                self.laplacian_coeff_list += [curr_laplacian_coeff]
+                self.lbw_iter_steps_list += [curr_lbw_iter_steps]
+                self.sgd_learning_rate_list +=[None]
+                self.sgd_batch_size_list += [None]
+                self.ba_batch_size_list += [None]
+                self.sgd_iter_steps_list += [None]
+                self.ba_iter_steps_list += [None]
+                #self.inv_cov_list += [1.0/curr_var_diagonal]
 
 
             # ------Constrained optimizatino for updating the weights------                        
@@ -614,11 +650,14 @@ class TuningCurveOptimizer_Noncyclic:
             
             # ------save results------
             if num_iter % save_steps == 0:
-                # save after the weight updating step
-                self.mark_list += ['lbw']
+                if alter_save: # save after the weight updating step (gd step saved perviously)
+                    self.mark_list += ['lbw']
+                    self.time_list += [spent_time2]
+                else: # save after a cycle                    
+                    self.mark_list += ['lb']
+                    self.time_list += [spent_time1 + spent_time2]                
                 self.tuning_list.append(curr_tuning.copy())
                 self.weight_list.append(curr_weight.copy())
-                self.time_list += [spent_time2]
                 self.num_iter_list += [start_num_iter + num_iter]
                 if compute_lbinfo:
                     lbinfo_tc = lower_bound_evaluate(curr_tuning, curr_weight, curr_var_diagonal)
@@ -626,7 +665,7 @@ class TuningCurveOptimizer_Noncyclic:
                         print(num_iter, 'LB', lbinfo_tc, spent_time1, spent_time2)
                     self.lbinfo_list += [lbinfo_tc]
                 else:
-                    self.lbinfo_list += [None]                    
+                    self.lbinfo_list += [None]
                 if compute_info:
                     grad_tc = np.zeros_like(curr_tuning)
                     info_tc = mc_iter_func(
@@ -641,22 +680,16 @@ class TuningCurveOptimizer_Noncyclic:
                 else:
                     self.info_list += [None]
                     self.grad_list += [None]
-                # save after two steps
-                self.lbgd_learning_rate_list += [curr_lbgd_learning_rate, None]
-                self.lbgd_iter_steps_list += [curr_lbgd_iter_steps, None]
-                self.laplacian_coeff_list += [curr_laplacian_coeff, None]
-                self.lbw_iter_steps_list += [None, curr_lbw_iter_steps]
-
-                self.sgd_learning_rate_list +=[None, None]
-                self.sgd_batch_size_list += [None, None]
-                self.ba_batch_size_list += [None, None]
-                self.sgd_iter_steps_list += [None, None]
-                self.ba_iter_steps_list += [None, None]
-                if self.model == 'Poisson':
-                    curr_inv_cov_mat = None
-                else:
-                    curr_inv_cov_mat = self.inv_cov_mat
-                #self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+                self.lbgd_learning_rate_list += [curr_lbgd_learning_rate]
+                self.lbgd_iter_steps_list += [curr_lbgd_iter_steps]
+                self.laplacian_coeff_list += [curr_laplacian_coeff]
+                self.lbw_iter_steps_list += [curr_lbw_iter_steps]
+                self.sgd_learning_rate_list +=[None]
+                self.sgd_batch_size_list += [None]
+                self.ba_batch_size_list += [None]
+                self.sgd_iter_steps_list += [None]
+                self.ba_iter_steps_list += [None]
+                #self.inv_cov_list += [1.0/curr_var_diagonal]
 
             if plot_live and num_iter % alter_plot_live==0:
                 for i in range(self.numNeuro):
