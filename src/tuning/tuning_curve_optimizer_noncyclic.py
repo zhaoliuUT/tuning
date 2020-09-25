@@ -32,7 +32,7 @@ class TuningCurveOptimizer_Noncyclic:
                                   laplacian_2d (true or false), laplacian_shape, weighted_laplacian
         Result Storage: res_len, and 17 lists:
             tuning_list, weight_list, info_list, grad_list, 
-            inv_cov_list, laplacian_coeff_list, time_list, mark_list, 
+            laplacian_coeff_list, time_list, mark_list, 
             # for maximizing MI:
             sgd_learning_rate_list, sgd_batch_size_list, sgd_iter_steps_list, 
             ba_batch_size_list, ba_iter_steps_list,
@@ -197,10 +197,10 @@ class TuningCurveOptimizer_Noncyclic:
         self.weight_list = [tc_init.weight.copy()]
         self.info_list = [tc_init.info]
         self.grad_list = [tc_init.grad.copy()]
-        if self.model == 'Poisson':
-            self.inv_cov_list = [None]
-        else:
-            self.inv_cov_list = [tc_init.inv_cov_mat.copy()]
+#         if self.model == 'Poisson':
+#             self.inv_cov_list = [None]
+#         else:
+#             self.inv_cov_list = [tc_init.inv_cov_mat.copy()]
         self.time_list = [None]
         self.mark_list = [None]
         self.sgd_learning_rate_list = [None]
@@ -423,7 +423,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.lbgd_iter_steps_list += [None, None]
                 self.lbw_iter_steps_list += [None, None]
                 self.lbinfo_list += [None, None]
-                self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+                #self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
 
             if plot_live and num_iter%alter_plot_live==0:
                 for i in range(self.numNeuro):
@@ -646,7 +646,7 @@ class TuningCurveOptimizer_Noncyclic:
                     curr_inv_cov_mat = None
                 else:
                     curr_inv_cov_mat = self.inv_cov_mat
-                self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
+                #self.inv_cov_list += [curr_inv_cov_mat, curr_inv_cov_mat]
 
             if plot_live and num_iter % alter_plot_live==0:
                 for i in range(self.numNeuro):
@@ -669,7 +669,8 @@ class TuningCurveOptimizer_Noncyclic:
     def check_list_len(self):
         # 17 lists same as self.res_len?
         print(len(self.tuning_list), len(self.weight_list), len(self.info_list), \
-              len(self.grad_list), len(self.inv_cov_list), len(self.time_list), len(self.mark_list), \
+              len(self.grad_list), len(self.time_list), len(self.mark_list), \
+              #len(self.inv_cov_list), \
               len(self.sgd_learning_rate_list), len(self.sgd_iter_steps_list), len(self.sgd_iter_steps_list), \
               len(self.ba_batch_size_list), len(self.ba_iter_steps_list), len(self.laplacian_coeff_list), \
               len(self.lbgd_learning_rate_list), len(self.lbgd_iter_steps_list), \
@@ -694,7 +695,7 @@ class TuningCurveOptimizer_Noncyclic:
         self.ba_batch_size_list = self.ba_batch_size_list[0:m]
         self.ba_iter_steps_list = self.ba_iter_steps_list[0:m]
         self.laplacian_coeff_list = self.laplacian_coeff_list[0:m]
-        self.inv_cov_list = self.inv_cov_list[0:m]
+        #self.inv_cov_list = self.inv_cov_list[0:m]
         
         self.lbgd_learning_rate_list = self.lbgd_learning_rate_list[0:m]
         self.lbgd_iter_steps_list = self.lbgd_iter_steps_list[0:m]
@@ -712,7 +713,7 @@ class TuningCurveOptimizer_Noncyclic:
         # pos must be in [0, self.len-1]
         if self.tuning_list[pos] is not None:
             tc = TuningCurve_Noncyclic(self.model, self.tuning_list[pos], self.weight_list[pos],
-                                       inv_cov_mat=self.inv_cov_list[pos],
+                                       inv_cov_mat=self.inv_cov_mat, #self.inv_cov_list[pos],
                                        conv=self.conv, tau=self.tau,
                                        info=self.info_list[pos],
                                        grad=self.grad_list[pos], 
@@ -772,7 +773,7 @@ class TuningCurveOptimizer_Noncyclic:
         for i in range(self.res_len):
             if self.info_list[i] is not None:
                 tc = TuningCurve_Noncyclic(self.model, self.tuning_list[i], self.weight_list[i],
-                                           inv_cov_mat=self.inv_cov_list[i],
+                                           inv_cov_mat=self.inv_cov_mat, #self.inv_cov_list[i],
                                            conv=self.conv, tau=self.tau,
                                            info=self.info_list[i],
                                            grad=self.grad_list[i], 
@@ -824,6 +825,7 @@ class TuningCurveOptimizer_Noncyclic:
         res_dict['model'] = self.model
         res_dict['conv'] = self.conv
         res_dict['tau'] = self.tau
+        res_dict['inv_cov'] = self.inv_cov_mat # None for Poisson
         res_dict['num_threads'] = self.num_threads
         res_dict['fp'] = self.fp
         res_dict['fm'] = self.fm
@@ -838,7 +840,7 @@ class TuningCurveOptimizer_Noncyclic:
         res_dict['weight'] = self.weight_list
         res_dict['grad'] = self.grad_list
         res_dict['info'] = self.info_list
-        res_dict['inv_cov'] = self.inv_cov_list # for gaussian
+        #res_dict['inv_cov'] = self.inv_cov_list
         
         res_dict['mark'] = self.mark_list
         res_dict['time'] = self.time_list
@@ -884,7 +886,7 @@ class TuningCurveOptimizer_Noncyclic:
             res_dict['model'], 
             res_dict['tuning'][0],
             res_dict['weight'][0], 
-            inv_cov_mat=res_dict['inv_cov'][0],
+            inv_cov_mat=res_dict['inv_cov'],
             conv=res_dict['conv'], 
             tau=res_dict['tau'],
             info=res_dict['info'][0], 
@@ -900,7 +902,7 @@ class TuningCurveOptimizer_Noncyclic:
         tc_opt.info_list = copy.copy(res_dict['info'])
         tc_opt.grad_list = copy.copy(res_dict['grad'])
 
-        tc_opt.inv_cov_list = copy.copy(res_dict['inv_cov'])
+        #tc_opt.inv_cov_list = copy.copy(res_dict['inv_cov'])
 
         tc_opt.time_list = copy.copy(res_dict['time'])
         tc_opt.mark_list = copy.copy(res_dict['mark'])
