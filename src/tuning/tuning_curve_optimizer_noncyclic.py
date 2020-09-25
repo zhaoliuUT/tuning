@@ -71,7 +71,7 @@ class TuningCurveOptimizer_Noncyclic:
                 # printing and plotting options
                 print_info=True, # print mutual information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
-                alter_plot_live=10, # plot every several steps
+                plot_steps=10, # plot every several steps
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plotting
                )
@@ -100,7 +100,7 @@ class TuningCurveOptimizer_Noncyclic:
                 # print and plot options
                 print_info=True, # print information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
-                alter_plot_live=10, # plot every several steps
+                plot_steps=10, # plot every several steps
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plottting
                )
@@ -281,7 +281,7 @@ class TuningCurveOptimizer_Noncyclic:
                 # printing and plotting options
                 print_info=True, # print mutual information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
-                alter_plot_live=10, # plot every several steps
+                plot_steps=10, # plot every several steps
                 live_fig=None, # figure used for live plotting
                 live_ax_list=None, # axes used for live plotting
                ):
@@ -455,7 +455,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.lbinfo_list += [None]
                 #self.inv_cov_list += [curr_inv_cov_mat]
 
-            if plot_live and num_iter%alter_plot_live==0:
+            if plot_live and num_iter%plot_steps==0:
                 for i in range(self.numNeuro):
                     live_ax_list[i].clear()
                     xx, yy = pc_fun_weights(curr_tuning[i,:], curr_weight)
@@ -495,7 +495,7 @@ class TuningCurveOptimizer_Noncyclic:
                             # print and plot options
                             print_info=True, # print information every several steps
                             plot_live=False, #used in live plotting, only available for 1d
-                            alter_plot_live=10, # plot every several steps
+                            plot_steps=10, # plot every several steps
                             live_fig=None, # figure used for live plotting
                             live_ax_list=None, # axes used for live plottting
                            ):
@@ -691,7 +691,7 @@ class TuningCurveOptimizer_Noncyclic:
                 self.ba_iter_steps_list += [None]
                 #self.inv_cov_list += [1.0/curr_var_diagonal]
 
-            if plot_live and num_iter % alter_plot_live==0:
+            if plot_live and num_iter % plot_steps==0:
                 for i in range(self.numNeuro):
                     live_ax_list[i].clear()
                     xx, yy = pc_fun_weights(curr_tuning[i,:], curr_weight)
