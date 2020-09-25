@@ -63,7 +63,7 @@ class TuningCurveOptimizer_Noncyclic:
                 ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
                 ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
                 
-                alter_save=1, # save result every several steps
+                save_steps=1, # save result every several steps
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used
                 print_info=True, # print mutual information every several steps
@@ -86,7 +86,7 @@ class TuningCurveOptimizer_Noncyclic:
                 lbgd_iter_steps=1, # number of steps for gd in every cycle
                 lbw_iter_steps=1, # number of steps for optimizing weights in every cycle                            
 
-                alter_save=1, # save result every several steps
+                save_steps=1, # save result every several steps
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used
                 compute_lbinfo=True, # compute the lower bound every several steps
@@ -267,7 +267,7 @@ class TuningCurveOptimizer_Noncyclic:
                 ba_batch_size=1000, # batch size for Monte Carlo in Blahut-Arimoto
                 ba_iter_steps=1, # number of steps for Blahut-Arimoto in every cycle
                 
-                alter_save=1, # save result every several steps
+                save_steps=1, # save result every several steps
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used
                 print_info=True, # print mutual information every several steps
@@ -355,7 +355,7 @@ class TuningCurveOptimizer_Noncyclic:
 
             curr_tuning = x_list[-1].copy()
             spent_time1 = time.time() - curr_time
-            if num_iter % alter_save == 0:
+            if num_iter % save_steps == 0:
                 # save after the sgd step
                 self.mark_list += ['sgd']
                 self.tuning_list.append(curr_tuning.copy())
@@ -395,7 +395,7 @@ class TuningCurveOptimizer_Noncyclic:
             spent_time2 = time.time() - curr_time
             
             # ------save results------ 
-            if num_iter % alter_save == 0:
+            if num_iter % save_steps == 0:
                 # save after arimoto step (sgd step saved perviously)
                 self.mark_list += ['ba']
                 self.tuning_list.append(curr_tuning.copy())
@@ -461,7 +461,7 @@ class TuningCurveOptimizer_Noncyclic:
                             lbgd_iter_steps=1, # number of steps for gd in every cycle
                             lbw_iter_steps=1, # number of steps for optimizing weights in every cycle
                             
-                            alter_save=1, # save result every several steps
+                            save_steps=1, # save result every several steps
                             compute_info=True, # compute mutual information every several steps
                             compute_info_mc=1e4, # number of Monte Carlo iterations used                            
                             compute_lbinfo=True, # compute the lower bound every several steps
@@ -562,7 +562,7 @@ class TuningCurveOptimizer_Noncyclic:
                 curr_var_diagonal = curr_tuning.copy()
             spent_time1 = time.time() - curr_time
             
-            if num_iter % alter_save == 0:
+            if num_iter % save_steps == 0:
                 # save after the gd step
                 self.mark_list += ['lbgd']
                 self.tuning_list.append(curr_tuning.copy())
@@ -613,7 +613,7 @@ class TuningCurveOptimizer_Noncyclic:
             spent_time2 = time.time() - curr_time
             
             # ------save results------
-            if num_iter % alter_save == 0:
+            if num_iter % save_steps == 0:
                 # save after the weight updating step
                 self.mark_list += ['lbw']
                 self.tuning_list.append(curr_tuning.copy())
