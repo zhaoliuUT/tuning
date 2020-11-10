@@ -91,6 +91,7 @@ def lower_bound_gd_with_laplacian(
     var_diagonal, # if model is Poisson then this is equal to tuning (copied, not changed during iterations)
     laplacian_coeff=0, 
     laplacian_shape=None, # only used in 2d laplacian
+    laplacian_weight_tol=0, # tolerance for adding laplacian
     weighted_laplacian=False,
     conv=None, tau=1.0, num_threads=8,
 ):
@@ -124,6 +125,15 @@ def lower_bound_gd_with_laplacian(
         #nBin = nBin1*nBin2
     tuning_shape = tuning.shape
     
+    # compute the indices for adding laplacian
+    if laplacian_shape is None: # 1d laplacian
+        ll = np.where(weight >=laplacian_weight_tol)[0]
+        ll_num = len(ll)
+        # 2d neighbours not supported since only ll1 is sorted, ll2 is not sorted.
+#     else:
+#         ll1, ll2 = np.where(weight >=weight_tol_laplacian)
+#         ll_num = len(ll1)
+
     curve_list = []
     curve_grad_list = []
             
@@ -142,14 +152,14 @@ def lower_bound_gd_with_laplacian(
         if (laplacian_coeff!=0) and (laplacian_shape is None): # 1d laplacian
             laplacian_term = np.zeros_like(x)
             if weighted_laplacian:                
-                for j in range(nBin):
-                    laplacian_term[:, j] = weight[(j-1)%nBin]*(x[:, (j-1)%nBin]-x[:, j])
-                    laplacian_term[:, j] += weight[(j+1)%nBin]*(x[:, (j+1)%nBin]-x[:, j])
+                for j in range(ll_num):
+                    laplacian_term[:, ll[j]] = weight[ll[(j-1)%ll_num]]*(x[:, ll[(j-1)%ll_num]]-x[:, ll[j]])
+                    laplacian_term[:, ll[j]] += weight[ll[(j+1)%ll_num]]*(x[:, ll[(j+1)%ll_num]]-x[:, ll[j]])
                 laplacian_term *= weight #laplacian_term[k, j]*weight[j]
             else:
-                for j in range(nBin):
-                    laplacian_term[:, j] = x[:, (j-1)%nBin] + x[:, (j+1)%nBin] - 2*x[:, j]
-            x += laplacian_coeff * laplacian_term        
+                for j in range(ll_num):
+                    laplacian_term[:, ll[j]] = x[:, ll[(j-1)%ll_num]] + x[:, ll[(j+1)%ll_num]] - 2*x[:, ll[j]]
+            x += laplacian_coeff * laplacian_term
         
         if (laplacian_coeff!=0) and (laplacian_shape is not None): # 2d laplacian
             xs = x.reshape((nNeuro, nBin1, nBin2))
