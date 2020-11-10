@@ -55,6 +55,7 @@ class TuningCurveOptimizer_Noncyclic:
                 laplacian_coeff=0, # laplacian coefficient in regularization
                 laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
                 laplacian_shape=None, # only for 2d laplacian
+                laplacian_weight_tol=0, # tolerance for adding laplacian to the points
                 weighted_laplacian=False, # whether laplacian is weighted
                 
                 sgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
@@ -83,10 +84,9 @@ class TuningCurveOptimizer_Noncyclic:
                 laplacian_coeff=0, # laplacian coefficient in regularization
                 laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
                 laplacian_shape=None, # only for 2d laplacian
+                laplacian_weight_tol=0, # tolerance for adding laplacian to the points
                 weighted_laplacian=False, # whether laplacian is weighted
-
                 lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))
-
                 lbgd_iter_steps=1, # number of steps for gd in every cycle
                 lbw_iter_steps=1, # number of steps for optimizing weights in every cycle
                 # saving options
@@ -96,7 +96,6 @@ class TuningCurveOptimizer_Noncyclic:
                 compute_info=True, # compute mutual information every several steps
                 compute_info_mc=1e4, # number of Monte Carlo iterations used                            
                 compute_lbinfo=True, # compute the lower bound every several steps
-
                 # print and plot options
                 print_info=True, # print information every several steps
                 plot_live=False, #used in live plotting, only available for 1d
@@ -265,6 +264,7 @@ class TuningCurveOptimizer_Noncyclic:
                 laplacian_coeff=0, # laplacian coefficient in regularization
                 laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
                 laplacian_shape=None, # only for 2d laplacian
+                laplacian_weight_tol=0, # tolerance for adding laplacian to the points
                 weighted_laplacian=False, # whether laplacian is weighted
                 
                 sgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))               
@@ -290,6 +290,7 @@ class TuningCurveOptimizer_Noncyclic:
         self.laplacian_2d = laplacian_2d
         self.laplacian_shape = laplacian_shape
         self.weighted_laplacian = weighted_laplacian
+        self.laplacian_weight_tol = laplacian_weight_tol
         if (not laplacian_2d) and (laplacian_shape is not None):
             raise Exception('No input needed for laplacian shape for 1d neighbour case')
         if laplacian_2d and laplacian_shape is None:
@@ -355,6 +356,7 @@ class TuningCurveOptimizer_Noncyclic:
                 fm=self.fm, # not working when fp_vec, fm_vec is not uniform...
                 laplacian_coeff=laplacian_coeff,
                 laplacian_shape=laplacian_shape,
+                laplacian_weight_tol=laplacian_weight_tol,
                 weighted_laplacian=weighted_laplacian,
                 conv=self.conv,
                 tau=self.tau,
@@ -478,6 +480,7 @@ class TuningCurveOptimizer_Noncyclic:
                             laplacian_coeff=0, # laplacian coefficient in regularization
                             laplacian_2d=False, # laplacian on 2d neighbours or 1d neighbours
                             laplacian_shape=None, # only for 2d laplacian
+                            laplacian_weight_tol=0, # tolerance for adding laplacian to the points
                             weighted_laplacian=False, # whether laplacian is weighted
 
                             lbgd_decrease_lr=False, # decrease learning rate (according to sqrt(number of iterations))
@@ -508,6 +511,7 @@ class TuningCurveOptimizer_Noncyclic:
         self.laplacian_2d = laplacian_2d
         self.laplacian_shape = laplacian_shape
         self.weighted_laplacian = weighted_laplacian
+        self.laplacian_weight_tol = laplacian_weight_tol
         if (not laplacian_2d) and (laplacian_shape is not None):
             raise Exception('No input needed for laplacian shape for 1d neighbour case')
         if laplacian_2d and laplacian_shape is None:
@@ -576,6 +580,7 @@ class TuningCurveOptimizer_Noncyclic:
                 var_diagonal=curr_var_diagonal,
                 laplacian_coeff=curr_laplacian_coeff,
                 laplacian_shape=laplacian_shape,
+                laplacian_weight_tol=laplacian_weight_tol,
                 weighted_laplacian=weighted_laplacian,
                 conv=self.conv,
                 tau=self.tau,
@@ -884,7 +889,7 @@ class TuningCurveOptimizer_Noncyclic:
         res_dict['laplacian_2d'] = self.laplacian_2d
         res_dict['laplacian_shape'] = self.laplacian_shape
         res_dict['weighted_laplacian'] = self.weighted_laplacian
-        
+        res_dict['laplacian_weight_tol'] = self.laplacian_weight_tol
         # save lists
         res_dict['tuning'] = self.tuning_list
         res_dict['weight'] = self.weight_list
@@ -980,6 +985,7 @@ class TuningCurveOptimizer_Noncyclic:
         tc_opt.laplacian_2d = res_dict['laplacian_2d']
         tc_opt.laplacian_shape = res_dict['laplacian_shape']
         tc_opt.weighted_laplacian = res_dict['weighted_laplacian']
+        tc_opt.laplacian_weight_tol = res_dict['laplacian_weight_tol']
         return tc_opt
     
     @staticmethod
