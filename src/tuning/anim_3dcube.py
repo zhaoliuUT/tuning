@@ -393,10 +393,7 @@ def set_scatter_data_in_axis(ax, scat, points_data, weights=None, path_vec=None,
         raise Exception("Wrong dimension of input points_data: \
         unable to plot the path in 1-dimension!")
 
-    if path_vec is not None and len(path_vec)!= num_pts:
-        raise Exception('Wrong input of the path vector: \
-        the length must be equal to the number of points in point_data!')
-    elif path_vec is not None and np.any(path_vec >= num_pts):
+    if path_vec is not None and np.any(path_vec >= num_pts):
         raise Exception('Wrong input of the path vector: \
         each number must be an interger in [0, number of points-1]!')
 
