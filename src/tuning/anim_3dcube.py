@@ -529,7 +529,7 @@ def set_hist_data_in_axis(ax, weights, color_arr, path_vec=None, weight_max=1.0)
     If path_vec is not None, the order of the bars in the histogram are re-arranged according to path_vec.
     '''
     if path_vec is not None:
-	num_pts = len(path_vec) # number of points
+        num_pts = len(path_vec) # number of points
     else:
         num_pts = len(weights)
 
@@ -559,7 +559,7 @@ def set_weight_bar_data_in_axis(ax, weights, color_arr, path_vec=None, ):
     '''
 
     if path_vec is not None:
-	num_pts = len(path_vec) # number of points
+        num_pts = len(path_vec) # number of points
     else:
         num_pts = len(weights)
 
