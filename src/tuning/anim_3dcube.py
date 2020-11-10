@@ -528,8 +528,10 @@ def set_hist_data_in_axis(ax, weights, color_arr, path_vec=None, weight_max=1.0)
     The y-limit of the axis can be adjusted using weight_max.
     If path_vec is not None, the order of the bars in the histogram are re-arranged according to path_vec.
     '''
-
-    num_pts =len(weights) # number of points
+    if path_vec is not None:
+	num_pts = len(path_vec) # number of points
+    else:
+        num_pts = len(weights)
 
     if color_arr.shape[0]!=num_pts:
         raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
@@ -556,7 +558,10 @@ def set_weight_bar_data_in_axis(ax, weights, color_arr, path_vec=None, ):
     If path_vec is not None, the order of the colors of weights are re-arranged according to path_vec.
     '''
 
-    num_pts =len(weights) # number of points
+    if path_vec is not None:
+	num_pts = len(path_vec) # number of points
+    else:
+        num_pts = len(weights)
 
     if color_arr.shape[0]!=num_pts:
         raise Exception("Wrong dimension of color array: inconsistent with the number of points!")
