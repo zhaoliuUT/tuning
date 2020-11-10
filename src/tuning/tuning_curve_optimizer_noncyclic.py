@@ -363,8 +363,10 @@ class TuningCurveOptimizer_Noncyclic:
                 num_threads=self.num_threads,
             )
     
-
-            curr_tuning = x_list[-1].copy()
+            if len(x_list)==0:
+                curr_tuning = self.tuning.copy()
+            else:
+                curr_tuning = x_list[-1].copy()
             spent_time1 = time.time() - curr_time
             if num_iter % save_steps == 0 and alter_save:
                 # save after the sgd step
@@ -586,8 +588,12 @@ class TuningCurveOptimizer_Noncyclic:
                 tau=self.tau,
                 num_threads=self.num_threads,
             )
+            
+            if len(x_list)==0:
+                curr_tuning = self.tuning.copy()
+            else:
+                curr_tuning = x_list[-1].copy()
 
-            curr_tuning = x_list[-1].copy()
             # update the variance matrix if Poisson
             if self.model == 'Poisson':
                 curr_var_diagonal = curr_tuning.copy()
